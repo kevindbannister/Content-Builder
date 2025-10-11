@@ -282,8 +282,10 @@ function WelcomePage({ session, startNewSession, navTo, resetSession }) {
     <section className="min-h-screen px-[7vw] pt-[14vh] pb-16">
       <div className="flex items-center gap-3">
         <h1 className="text-[9vw] md:text-[96px] font-extrabold leading-[1.05] tracking-wide">Welcome</h1>
-        <button onClick={() => { resetSession(); navTo("welcome"); }}
-          className="px-4 py-2 rounded-lg border border-[#2a3357] hover:bg-[#151a32] text-base">
+        <button
+          onClick={resetSession}
+          className="px-4 py-2 rounded-lg border border-[#2a3357] hover:bg-[#151a32] text-base"
+        >
           New
         </button>
       </div>
@@ -1103,7 +1105,7 @@ function ContentOSApp() {
         "Reset session? This clears brand, topics, snapshot, article, social, locks, refdata, and webhook settings."
       )
     )
-      return;
+      return false;
     try {
       const toDelete = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -1138,20 +1140,11 @@ function ContentOSApp() {
     });
     setN8N({ webhook: "" });
     setRefdata({ headers: [], rows: [] });
-    try {
-      window.location.replace(
-        window.location.pathname +
-          window.location.search +
-          "#welcome?ts=" +
-          Date.now()
-      );
-      return;
-    } catch {}
-    try {
-      window.location.reload();
-      return;
-    } catch {}
     setView("welcome");
+    try {
+      window.location.hash = "welcome";
+    } catch {}
+    return true;
   };
 
   const flow = [
@@ -1268,8 +1261,10 @@ function ContentOSApp() {
               })[view] ?? "ContentOS"}
             </div>
           </div>
-          <button onClick={() => { resetSession(); navTo("welcome"); }}
-            className="px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]">
+          <button
+            onClick={resetSession}
+            className="px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
+          >
             New
           </button>
         </div>
