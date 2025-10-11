@@ -483,12 +483,28 @@ function TopicsPage({
   nextFromTopics,
 }) {
   const handleNext = async () => {
+    const trimmedTopic = tempTopic.trim();
+    const trimmedContext = tempContext.trim();
+    const pendingTopic = trimmedTopic
+      ? {
+          id: uuid(),
+          name: trimmedTopic,
+          context: trimmedContext,
+        }
+      : null;
+    const topicsPayload = pendingTopic
+      ? [...topics, pendingTopic]
+      : topics;
+    if (!topicsPayload.length) {
+      alert("Please enter a topic (context optional) before continuing.");
+      return;
+    }
     await postWebhook(
       "http://localhost:5678/webhook-test/3b79f412-93b8-4467-9e34-62b323d3623a",
       "topics_continue_click",
-      { topics }
+      { topics: topicsPayload }
     );
-    nextFromTopics();
+    nextFromTopics(pendingTopic);
   };
   return (
     <section className="min-h-screen px-[7vw] py-16">
@@ -996,19 +1012,27 @@ function ContentOSApp() {
       return n;
     });
   const removeTopic = (i) => setTopics((t) => t.filter((_, idx) => idx !== i));
-  const nextFromTopics = () => {
-    if (tempTopic.trim()) {
-      addTopic({
-        id: uuid(),
-        name: tempTopic.trim(),
-        context: tempContext.trim(),
-      });
-      setTempTopic("");
-      setTempContext("");
-    }
-    if (!topics.length && !tempTopic.trim()) {
+  const nextFromTopics = (pendingTopic) => {
+    const trimmedTopic = tempTopic.trim();
+    const trimmedContext = tempContext.trim();
+    const topicToAdd = pendingTopic
+      ? pendingTopic
+      : trimmedTopic
+      ? {
+          id: uuid(),
+          name: trimmedTopic,
+          context: trimmedContext,
+        }
+      : null;
+    const totalTopics = topicToAdd ? [...topics, topicToAdd] : topics;
+    if (!totalTopics.length) {
       alert("Please enter a topic (context optional) before continuing.");
       return;
+    }
+    if (topicToAdd) {
+      addTopic(topicToAdd);
+      setTempTopic("");
+      setTempContext("");
     }
     navTo("snapshot");
   };
