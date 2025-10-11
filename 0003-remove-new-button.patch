@@ -1,0 +1,21 @@
+diff --git a/src/pages/WelcomePage.jsx b/src/pages/WelcomePage.jsx
+index abcdef1..1234567 100644
+--- a/src/pages/WelcomePage.jsx
++++ b/src/pages/WelcomePage.jsx
+@@ -10,11 +10,7 @@ export default function WelcomePage({ resetSession, navTo }) {
+   return (
+     <div className="page-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+-      <h1>Welcome</h1>
+-      <button
+-        onClick={() => {
+-          resetSession();
+-          navTo("welcome");
+-        }}
+-        className="new-btn"
+-      >
+-        New
+-      </button>
++      <h1 style={{ margin: 0 }}>Welcome</h1>
+     </div>
+   );
+ }
