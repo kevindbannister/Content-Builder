@@ -1,0 +1,13 @@
+/* No Tailwind import here — CDN handles it */
+body {
+  background: radial-gradient(
+    1200px 800px at 60% 40%,
+    #131831 0%,
+    #0b1024 45%,
+    #0a0e1d 100%
+  );
+  color: white;
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+}
