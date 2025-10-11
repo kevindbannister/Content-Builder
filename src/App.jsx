@@ -295,12 +295,17 @@ function WelcomePage({ session, startNewSession, navTo, resetSession }) {
             below. This ID will be sent with all webhooks.
           </p>
           <div className="mt-3 flex items-center gap-3">
-            <button
-              onClick={handleStart}
-              className="bg-white text-[#0b1020] font-bold text-lg px-6 py-3 rounded-2xl shadow-xl"
-            >
-              Let's Create Your Content
-            </button>
+            <div className="flex flex-col">
+              <button
+                onClick={handleStart}
+                className="bg-white text-[#0b1020] font-bold text-lg px-6 py-3 rounded-2xl shadow-xl"
+              >
+                Let's Create Your Content
+              </button>
+              <p className="mt-1 text-xs italic text-slate-400">
+                http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7
+              </p>
+            </div>
             {session.id && (
               <div className="text-xs text-slate-300">
                 <div>
@@ -328,7 +333,7 @@ function WelcomePage({ session, startNewSession, navTo, resetSession }) {
 function BrandPage({ brand, setBrand, saveBrand }) {
   const handleSaveAndContinue = async () => {
     await postWebhook(
-      "http://localhost:5678/webhook-test/8787372f-aa37-4295-af51-f18c0b7d6a65",
+      "http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7",
       "brand_save_click",
       { brand }
     );
@@ -419,12 +424,17 @@ function BrandPage({ brand, setBrand, saveBrand }) {
         </label>
       </form>
       <div className="flex gap-3 mt-4">
-        <button
-          onClick={handleSaveAndContinue}
-          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
-        >
-          Save & Continue →
-        </button>
+        <div className="flex flex-col">
+          <button
+            onClick={handleSaveAndContinue}
+            className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+          >
+            Save & Continue
+          </button>
+          <p className="mt-1 text-xs italic text-slate-400">
+            http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7
+          </p>
+        </div>
         <button
           onClick={() =>
             setBrand({
@@ -477,13 +487,16 @@ function TopicsPage({
         tempContext={tempContext}
         setTempContext={setTempContext}
       />
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex flex-col items-end">
         <button
           onClick={handleNext}
           className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
         >
-          Continue →
+          Continue
         </button>
+        <p className="mt-1 text-xs italic text-slate-400">
+          http://localhost:5678/webhook-test/afcecf7d-65e8-48c8-8205-7eec66e72f15
+        </p>
       </div>
     </section>
   );
@@ -573,14 +586,17 @@ function SnapshotPage({
               className="mt-2 w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
             />
           </label>
-          <div className="flex items-end">
+          <div className="flex flex-col items-start justify-end">
             <button
               onClick={sendSnapshotChange}
               disabled={sending}
               className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60"
             >
-              {sending ? "Sending…" : "Send to n8n →"}
+              {sending ? "Sending…" : "Send to n8n"}
             </button>
+            <p className="mt-1 text-xs italic text-slate-400">
+              http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41
+            </p>
           </div>
         </div>
         <p className="text-xs text-slate-400 mt-2">
@@ -984,6 +1000,8 @@ function ContentOSApp() {
   // brand webhook + progress
   const BRAND_PROFILE_WEBHOOK =
     "http://localhost:5678/webhook-test/a242f149-0b31-4b16-a2db-f5cef241075e";
+  const SNAPSHOT_SEND_WEBHOOK =
+    "http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41";
   const saveBrand = async () => {
     if (!brand.archetype || !brand.tone) {
       alert("Please select an archetype and set your tone to continue.");
@@ -1049,16 +1067,18 @@ function ContentOSApp() {
   const sendSnapshotChange = async () => {
     if (!snapshotChange.trim())
       return alert("Please type the changes you want to send.");
-    if (!n8n.webhook?.trim())
-      return alert("Please set your n8n webhook URL first.");
     try {
       setSending(true);
-      const ok = await postWebhook(n8n.webhook, "snapshot_change_request", {
-        changes: snapshotChange,
-        snapshotText: snapshot.text,
-        topics,
-        brand,
-      });
+      const ok = await postWebhook(
+        SNAPSHOT_SEND_WEBHOOK,
+        "snapshot_change_request",
+        {
+          changes: snapshotChange,
+          snapshotText: snapshot.text,
+          topics,
+          brand,
+        }
+      );
       if (!ok) throw new Error("HTTP error");
       alert("Sent to n8n ✔︎");
       setSnapshotChange("");
