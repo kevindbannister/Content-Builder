@@ -114,7 +114,7 @@ const WEBHOOKS = {
   startSession:
     "http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7",
   brandProfile:
-    "http://localhost:5678/webhook-test/a242f149-0b31-4b16-a2db-f5cef241075e",
+    "http://localhost:5678/webhook-test/8787372f-aa37-4295-af51-f18c0b7d6a65",
   snapshotChange:
     "http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41",
 };
