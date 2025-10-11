@@ -110,6 +110,15 @@ async function postWebhook(url, type, data) {
   }
 }
 
+const WEBHOOKS = {
+  startSession:
+    "http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7",
+  brandProfile:
+    "http://localhost:5678/webhook-test/a242f149-0b31-4b16-a2db-f5cef241075e",
+  snapshotChange:
+    "http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41",
+};
+
 // ----------------------
 // Icons
 // ----------------------
@@ -268,11 +277,17 @@ function TopicEditor({
 // ----------------------
 // Page components
 // ----------------------
-function WelcomePage({ session, startNewSession, navTo, resetSession }) {
+function WelcomePage({
+  session,
+  startNewSession,
+  navTo,
+  resetSession,
+  webhooks,
+}) {
   const handleStart = async () => {
     const id = startNewSession();
     await postWebhook(
-      "http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7",
+      webhooks.startSession,
       "start_session",
       { sessionId: id }
     );
@@ -305,7 +320,7 @@ function WelcomePage({ session, startNewSession, navTo, resetSession }) {
                 Let's Create Your Content
               </button>
               <p className="mt-1 text-xs italic text-slate-400">
-                http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7
+                {webhooks.startSession}
               </p>
             </div>
             {session.id && (
@@ -332,10 +347,10 @@ function WelcomePage({ session, startNewSession, navTo, resetSession }) {
   );
 }
 
-function BrandPage({ brand, setBrand, saveBrand }) {
+function BrandPage({ brand, setBrand, saveBrand, webhooks }) {
   const handleSaveAndContinue = async () => {
     await postWebhook(
-      "http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7",
+      webhooks.brandProfile,
       "brand_save_click",
       { brand }
     );
@@ -434,7 +449,7 @@ function BrandPage({ brand, setBrand, saveBrand }) {
             Save & Continue
           </button>
           <p className="mt-1 text-xs italic text-slate-400">
-            http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7
+            {webhooks.brandProfile}
           </p>
         </div>
         <button
@@ -515,6 +530,7 @@ function SnapshotPage({
   sending,
   sendSnapshotChange,
   navTo,
+  webhooks,
 }) {
   return (
     <section className="min-h-screen px-[7vw] py-16">
@@ -597,7 +613,7 @@ function SnapshotPage({
               {sending ? "Sending…" : "Send to n8n"}
             </button>
             <p className="mt-1 text-xs italic text-slate-400">
-              http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41
+              {webhooks.snapshotChange}
             </p>
           </div>
         </div>
@@ -658,18 +674,16 @@ function ArticlePage({
                 return;
               }
               try {
-                const r = await fetch(n8n.webhook, {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({
-                    type: "generate_social_from_article",
+                const ok = await postWebhook(
+                  n8n.webhook,
+                  "generate_social_from_article",
+                  {
                     articleContent: article.content,
                     topics,
                     brand,
-                    timestamp: new Date().toISOString(),
-                  }),
-                });
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                  }
+                );
+                if (!ok) throw new Error("HTTP error");
                 alert("Requested social generation via n8n ✔︎");
               } catch (e) {
                 console.error(e);
@@ -1000,10 +1014,6 @@ function ContentOSApp() {
   };
 
   // brand webhook + progress
-  const BRAND_PROFILE_WEBHOOK =
-    "http://localhost:5678/webhook-test/a242f149-0b31-4b16-a2db-f5cef241075e";
-  const SNAPSHOT_SEND_WEBHOOK =
-    "http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41";
   const saveBrand = async () => {
     if (!brand.archetype || !brand.tone) {
       alert("Please select an archetype and set your tone to continue.");
@@ -1047,7 +1057,7 @@ function ContentOSApp() {
     };
     try {
       const ok = await postWebhook(
-        BRAND_PROFILE_WEBHOOK,
+        WEBHOOKS.brandProfile,
         "brand_profile",
         payload
       );
@@ -1072,7 +1082,7 @@ function ContentOSApp() {
     try {
       setSending(true);
       const ok = await postWebhook(
-        SNAPSHOT_SEND_WEBHOOK,
+        WEBHOOKS.snapshotChange,
         "snapshot_change_request",
         {
           changes: snapshotChange,
@@ -1297,10 +1307,16 @@ function ContentOSApp() {
             startNewSession={startNewSession}
             navTo={navTo}
             resetSession={resetSession}
+            webhooks={WEBHOOKS}
           />
         )}
         {view === "brand" && (
-          <BrandPage brand={brand} setBrand={setBrand} saveBrand={saveBrand} />
+          <BrandPage
+            brand={brand}
+            setBrand={setBrand}
+            saveBrand={saveBrand}
+            webhooks={WEBHOOKS}
+          />
         )}
         {view === "topics" && (
           <TopicsPage
@@ -1326,6 +1342,7 @@ function ContentOSApp() {
             sending={sending}
             sendSnapshotChange={sendSnapshotChange}
             navTo={navTo}
+            webhooks={WEBHOOKS}
           />
         )}
         {view === "article" && (
