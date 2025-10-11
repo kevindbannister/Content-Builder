@@ -484,7 +484,7 @@ function TopicsPage({
 }) {
   const handleNext = async () => {
     await postWebhook(
-      "http://localhost:5678/webhook-test/afcecf7d-65e8-48c8-8205-7eec66e72f15",
+      "http://localhost:5678/webhook-test/3b79f412-93b8-4467-9e34-62b323d3623a",
       "topics_continue_click",
       { topics }
     );
@@ -512,7 +512,7 @@ function TopicsPage({
           Continue
         </button>
         <p className="mt-1 text-xs italic text-slate-400">
-          http://localhost:5678/webhook-test/afcecf7d-65e8-48c8-8205-7eec66e72f15
+          http://localhost:5678/webhook-test/3b79f412-93b8-4467-9e34-62b323d3623a
         </p>
       </div>
     </section>
