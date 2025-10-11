@@ -268,14 +268,7 @@ function TopicEditor({
 // ----------------------
 // Page components
 // ----------------------
-function WelcomePage({
-  session,
-  startNewSession,
-  navTo,
-  refdata,
-  setRefdata,
-  resetSession,
-}) {
+function WelcomePage({ session, startNewSession, navTo, resetSession }) {
   const handleStart = async () => {
     const id = startNewSession();
     await postWebhook(
@@ -294,7 +287,7 @@ function WelcomePage({
           New
         </button>
       </div>
-      <div className="mt-6 grid lg:grid-cols-[2fr_3fr] gap-6">
+      <div className="mt-6 grid gap-6 max-w-3xl">
         <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
           <h3 className="text-lg font-semibold">Start a session</h3>
           <p className="text-sm text-slate-300 mt-1">
@@ -323,72 +316,6 @@ function WelcomePage({
                 >
                   Reset session
                 </button>
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
-          <h3 className="text-lg font-semibold">
-            Load reference spreadsheet (CSV)
-          </h3>
-          <p className="text-sm text-slate-300 mt-1">
-            Attach <em>ContentOS_Sessions_Template.csv</em> to drive prompts and
-            defaults. Data stays local.
-          </p>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            className="mt-3 block w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              try {
-                const text = await file.text();
-                const parsed = parseCSV(text);
-                setRefdata(parsed);
-                alert(
-                  `Loaded ${parsed.rows.length} rows / ${parsed.headers.length} columns from ${file.name}`
-                );
-              } catch (err) {
-                console.error(err);
-                alert(
-                  "Could not parse CSV. Make sure it is a valid comma-separated file."
-                );
-              }
-            }}
-          />
-          <div className="mt-3 text-xs text-slate-300">
-            <div>
-              Columns: <strong>{refdata.headers.length}</strong> · Rows:{" "}
-              <strong>{refdata.rows.length}</strong>
-            </div>
-            {!!refdata.rows.length && (
-              <div className="mt-2 max-h-40 overflow-auto rounded border border-[#232941]">
-                <table className="w-full text-xs">
-                  <thead className="bg-[#151a32] sticky top-0">
-                    <tr>
-                      {refdata.headers.slice(0, 6).map((h) => (
-                        <th
-                          key={h}
-                          className="text-left px-2 py-1 font-semibold"
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {refdata.rows.slice(0, 5).map((r, ri) => (
-                      <tr key={ri} className="odd:bg-[#0f1427]">
-                        {refdata.headers.slice(0, 6).map((h) => (
-                          <td key={h} className="px-2 py-1">
-                            {r[h]}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             )}
           </div>
@@ -1354,8 +1281,6 @@ function ContentOSApp() {
             session={session}
             startNewSession={startNewSession}
             navTo={navTo}
-            refdata={refdata}
-            setRefdata={setRefdata}
             resetSession={resetSession}
           />
         )}
