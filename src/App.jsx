@@ -939,14 +939,7 @@ function ContentOSApp() {
     welcome: false,
     brand: false,
   });
-  const [showWelcome, setShowWelcome] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      return localStorage.getItem("contentos.hideWelcome") !== "1";
-    } catch {
-      return true;
-    }
-  });
+  const [showWelcome, setShowWelcome] = useState(true);
   const [refdata, setRefdata] = useLocal("contentos.refdata", {
     headers: [],
     rows: [],
@@ -1204,6 +1197,7 @@ function ContentOSApp() {
     setN8N({ webhook: "" });
     setRefdata({ headers: [], rows: [] });
     setView("welcome");
+    setShowWelcome(true);
     try {
       window.location.hash = "welcome";
     } catch {}
