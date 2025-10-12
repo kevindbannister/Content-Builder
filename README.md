@@ -25,6 +25,6 @@ Commit the regenerated `docs/` folder and ensure GitHub Pages is configured to d
 
 ### Notes
 - Tailwind is loaded via the CDN play version in `index.html`. It's fine for prototyping.
-- Your webhooks are left as-is, pointing at `http://localhost:5678/...`.
+- Your webhooks are left as-is, pointing at `http://localhost:5678/webhook-test/...`.
 - All state is stored in `localStorage` under keys starting with `contentos.`
 - CSV upload uses a simple client-side parser.
