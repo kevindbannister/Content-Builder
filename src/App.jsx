@@ -642,6 +642,15 @@ function ArticlePage({
   navTo,
   setN8N,
 }) {
+  const handleArticleChangeKeyDown = (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      if (!sendingArticle) {
+        sendArticleChange();
+      }
+    }
+  };
+
   return (
     <section className="min-h-screen px-[7vw] py-16">
       <header className="mb-4">
@@ -663,13 +672,7 @@ function ArticlePage({
             className="w-full bg-[#0f1427] border border-[#232941] rounded-xl p-3 mt-2"
           />
         </label>
-        <div className="flex gap-3 mt-3">
-          <button
-            onClick={() => navTo("social")}
-            className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
-          >
-            Save & Continue →
-          </button>
+        <div className="flex justify-end mt-3">
           <button
             onClick={async () => {
               if (!n8n.webhook.trim()) {
@@ -695,7 +698,7 @@ function ArticlePage({
             }}
             className="bg-[#222845] border border-[#2a3357] text-white font-bold px-4 py-2 rounded-xl"
           >
-            Generate via n8n →
+            Generate Article →
           </button>
         </div>
         <pre className="mt-3 bg-[#0a0f22] border border-dashed border-[#2a3357] rounded-xl p-3 whitespace-pre-wrap">
@@ -707,18 +710,18 @@ function ArticlePage({
         <h3 className="text-lg font-semibold mb-2">
           Request changes to this article
         </h3>
-        <label className="block text-sm">
-          Your change request
+        <div className="bg-[#0a0f22] border border-[#2a3357] rounded-2xl p-3">
           <textarea
             value={articleChange}
             onChange={(e) => setArticleChange(e.target.value)}
-            rows={6}
-            placeholder="Type edits, section rewrites, tone tweaks, add stats, etc."
-            className="w-full bg-[#0f1427] border border-[#232941] rounded-xl p-3 mt-2"
+            onKeyDown={handleArticleChangeKeyDown}
+            rows={4}
+            placeholder="Type your change request…"
+            className="w-full bg-transparent border-none focus:outline-none text-sm resize-none"
           />
-        </label>
-        <div className="grid md:grid-cols-2 gap-3 mt-3">
-          <label className="block text-sm">
+        </div>
+        <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <label className="block text-sm md:flex-1">
             n8n Webhook URL
             <input
               value={n8n.webhook}
@@ -727,20 +730,29 @@ function ArticlePage({
               className="mt-2 w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
             />
           </label>
-          <div className="flex items-end">
+          <div className="flex items-center justify-end gap-3">
+            <p className="text-xs text-slate-400 hidden md:block">Press Ctrl + Enter to send</p>
             <button
               onClick={sendArticleChange}
               disabled={sendingArticle}
-              className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60"
+              className="bg-white text-[#0b1020] font-bold px-3 py-2 rounded-lg text-sm disabled:opacity-60"
             >
-              {sendingArticle ? "Sending…" : "Send to n8n →"}
+              {sendingArticle ? "Sending…" : "Send message"}
             </button>
           </div>
         </div>
         <p className="text-xs text-slate-400 mt-2">
-          Payload includes your change text, current article, topics, and brand
-          metadata.
+          Press Ctrl + Enter to send instantly. Payload includes your change text,
+          current article, topics, and brand metadata.
         </p>
+      </div>
+      <div className="mt-10 flex justify-end">
+        <button
+          onClick={() => navTo("social")}
+          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+        >
+          Save & Continue →
+        </button>
       </div>
     </section>
   );
