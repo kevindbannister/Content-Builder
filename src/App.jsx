@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.5";
 const VERSION_STORAGE_KEY = "contentos.version";
 const LOCAL_STORAGE_KEYS = [
   "contentos.session",
