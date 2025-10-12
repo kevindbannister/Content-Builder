@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import WelcomeOverlay from "./WelcomeOverlay";
 
 // ContentOS — React Single-File Preview (clean, router-ready structure)
 // This canvas version is self-contained and compiles on its own.
@@ -920,7 +919,6 @@ function ContentOSApp() {
   const [locks, setLocks] = useLocal("contentos.locks", {
     brand: false,
   });
-  const [showWelcome, setShowWelcome] = useState(true);
   const [refdata, setRefdata] = useLocal("contentos.refdata", {
     headers: [],
     rows: [],
@@ -1188,37 +1186,10 @@ function ContentOSApp() {
     setN8N({ webhook: "" });
     setRefdata({ headers: [], rows: [] });
     setView("brand");
-    setShowWelcome(true);
     try {
       window.location.hash = "brand";
     } catch {}
     return true;
-  };
-
-  const goToBrand = () => {
-    const target = FLOW_ORDER[0];
-    try {
-      window.location.hash = target;
-    } catch {}
-    setView(target);
-  };
-
-  const handleOverlaySkip = () => {
-    setLocks((l) => ({ ...(l ?? {}), brand: false }));
-    setShowWelcome(false);
-    goToBrand();
-  };
-
-  const handleOverlayCreate = async () => {
-    const sessionId = startNewSession();
-    const ok = await postWebhook(WEBHOOKS.startSession, "start_session", {
-      sessionId,
-    });
-    if (!ok) {
-      console.error("Start session webhook failed");
-    }
-    setShowWelcome(false);
-    goToBrand();
   };
 
   const flow = FLOW_ORDER;
@@ -1468,12 +1439,6 @@ CTA: Save this and start.`,
           <PodcastPage podcast={podcast} setPodcast={setPodcast} />
         )}
       </main>
-      {showWelcome && (
-        <WelcomeOverlay
-          onSkip={handleOverlaySkip}
-          onCreate={handleOverlayCreate}
-        />
-      )}
     </div>
   );
 }
