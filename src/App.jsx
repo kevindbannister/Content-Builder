@@ -339,13 +339,14 @@ function TopicEditor({
 // ----------------------
 // Page components
 // ----------------------
-function BrandPage({ brand, setBrand, saveBrand, webhooks }) {
+function BrandPage({ brand, setBrand, saveBrand, webhooks, ensureSessionId }) {
   const [showBrandDetails, setShowBrandDetails] = useState(true);
   const handleSaveAndContinue = async () => {
+    const sessionId = ensureSessionId ? ensureSessionId() : undefined;
     await postWebhook(
       webhooks.brandProfile,
       "brand_save_click",
-      { brand }
+      { brand, sessionId }
     );
     await saveBrand();
   };
@@ -493,6 +494,7 @@ function TopicsPage({
   cancelEditingTopic,
   nextFromTopics,
   webhooks,
+  ensureSessionId,
 }) {
   const handleNext = async () => {
     const trimmedTopic = tempTopic.trim();
@@ -529,8 +531,10 @@ function TopicsPage({
       return;
     }
     if (webhooks?.topicsContinue) {
+      const sessionId = ensureSessionId ? ensureSessionId() : undefined;
       await postWebhook(webhooks.topicsContinue, "topics_continue_click", {
         topics: topicsPayload,
+        sessionId,
       });
     }
     nextFromTopics({ pendingTopic, topicsPayload, isEditing });
@@ -745,6 +749,7 @@ function ArticlePage({
   navTo,
   setN8N,
   webhooks,
+  ensureSessionId,
 }) {
   const handleArticleChangeKeyDown = (event) => {
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
@@ -766,6 +771,7 @@ function ArticlePage({
           articleContent: article.content,
           topics,
           brand,
+          sessionId: ensureSessionId ? ensureSessionId() : undefined,
         }
       );
       if (!ok) throw new Error("HTTP error");
@@ -830,6 +836,7 @@ function ArticlePage({
                     articleContent: article.content,
                     topics,
                     brand,
+                    sessionId: ensureSessionId ? ensureSessionId() : undefined,
                   }
                 );
                 if (!ok) throw new Error("HTTP error");
@@ -1282,6 +1289,7 @@ function ContentOSApp() {
           snapshotText: snapshot.text,
           topics,
           brand,
+          sessionId: ensureSessionId(),
         }
       );
       if (!ok) throw new Error("HTTP error");
@@ -1309,6 +1317,7 @@ function ContentOSApp() {
         articleContent: article.content,
         topics,
         brand,
+        sessionId: ensureSessionId(),
       });
       if (!ok) throw new Error("HTTP error");
       alert("Article change request sent to n8n ✔︎");
@@ -1493,6 +1502,7 @@ function ContentOSApp() {
             setBrand={setBrand}
             saveBrand={saveBrand}
             webhooks={WEBHOOKS}
+            ensureSessionId={ensureSessionId}
           />
         )}
         {view === "topics" && (
@@ -1508,6 +1518,7 @@ function ContentOSApp() {
             cancelEditingTopic={cancelEditingTopic}
             nextFromTopics={nextFromTopics}
             webhooks={WEBHOOKS}
+            ensureSessionId={ensureSessionId}
           />
         )}
         {view === "snapshot" && (
@@ -1541,6 +1552,7 @@ function ContentOSApp() {
             navTo={navTo}
             setN8N={setN8N}
             webhooks={WEBHOOKS}
+            ensureSessionId={ensureSessionId}
           />
         )}
         {view === "social" && (
