@@ -47,13 +47,12 @@ export default function WelcomeOverlay({ onStart }) {
 
         <ul style={{ opacity: 0.9, lineHeight: 1.7, margin: "0 0 18px 18px" }}>
           <li>Keep your Brand → Topics → Snapshot → Article → Social → Podcast flow</li>
-          <li>We’ll remember you started and won’t show this again</li>
+          <li>Start fresh any time with the New button in the header</li>
         </ul>
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button
             onClick={() => {
-              localStorage.setItem("contentos.hideWelcome", "1");
               onStart?.();
             }}
             style={{
@@ -69,7 +68,6 @@ export default function WelcomeOverlay({ onStart }) {
           </button>
           <button
             onClick={() => {
-              localStorage.setItem("contentos.hideWelcome", "1");
               onStart?.();
             }}
             style={{
