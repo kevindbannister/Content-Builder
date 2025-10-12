@@ -216,9 +216,24 @@ function TopicEditor({
   setTempTopic,
   tempContext,
   setTempContext,
+  editingTopicId,
+  onEditTopic,
+  onCancelEdit,
 }) {
   return (
     <div>
+      {editingTopicId && (
+        <div className="flex items-center justify-between mb-2 text-xs text-slate-300">
+          <span>Editing existing topic</span>
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="px-2 py-1 rounded border border-[#2a3357] hover:bg-[#151a32]"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       <div className="flex flex-col gap-2 mb-3">
         <input
           value={tempTopic}
@@ -244,6 +259,12 @@ function TopicEditor({
               <div className="flex justify-between items-center">
                 <strong>{t.name}</strong>
                 <div className="flex gap-2">
+                  <button
+                    className="bg-[#242a4f] px-2 py-1 rounded"
+                    onClick={() => onEditTopic(t)}
+                  >
+                    Edit
+                  </button>
                   <button
                     className="bg-[#242a4f] px-2 py-1 rounded"
                     onClick={() => moveTopic(i, -1)}
@@ -485,21 +506,37 @@ function TopicsPage({
   setTempTopic,
   tempContext,
   setTempContext,
+  editingTopicId,
+  startEditingTopic,
+  cancelEditingTopic,
   nextFromTopics,
 }) {
   const handleNext = async () => {
     const trimmedTopic = tempTopic.trim();
     const trimmedContext = tempContext.trim();
-    const pendingTopic = trimmedTopic
-      ? {
-          id: uuid(),
-          name: trimmedTopic,
-          context: trimmedContext,
-        }
-      : null;
-    const topicsPayload = pendingTopic
-      ? [...topics, pendingTopic]
-      : topics;
+    const isEditing = Boolean(editingTopicId);
+    let pendingTopic = null;
+    let topicsPayload = topics;
+
+    if (isEditing) {
+      if (!trimmedTopic) {
+        alert("Please enter a topic before continuing.");
+        return;
+      }
+      topicsPayload = topics.map((topic) =>
+        topic.id === editingTopicId
+          ? { ...topic, name: trimmedTopic, context: trimmedContext }
+          : topic
+      );
+    } else if (trimmedTopic) {
+      pendingTopic = {
+        id: uuid(),
+        name: trimmedTopic,
+        context: trimmedContext,
+      };
+      topicsPayload = [...topics, pendingTopic];
+    }
+
     if (!topicsPayload.length) {
       alert("Please enter a topic (context optional) before continuing.");
       return;
@@ -509,7 +546,7 @@ function TopicsPage({
       "topics_continue_click",
       { topics: topicsPayload }
     );
-    nextFromTopics(pendingTopic);
+    nextFromTopics({ pendingTopic, topicsPayload, isEditing });
   };
   return (
     <section className="min-h-screen px-[7vw] py-16">
@@ -524,6 +561,9 @@ function TopicsPage({
         setTempTopic={setTempTopic}
         tempContext={tempContext}
         setTempContext={setTempContext}
+        editingTopicId={editingTopicId}
+        onEditTopic={startEditingTopic}
+        onCancelEdit={cancelEditingTopic}
       />
       <div className="mt-6 flex flex-col items-end">
         <button
@@ -966,6 +1006,7 @@ function ContentOSApp() {
     style: "",
   });
   const [topics, setTopics] = useLocal("contentos.topics", []);
+  const [editingTopicId, setEditingTopicId] = useState(null);
   const [tempTopic, setTempTopic] = useState("");
   const [tempContext, setTempContext] = useState("");
   const [snapshot, setSnapshot] = useLocal("contentos.snapshot", { text: "" });
@@ -1026,26 +1067,35 @@ function ContentOSApp() {
       [n[i], n[j]] = [n[j], n[i]];
       return n;
     });
-  const removeTopic = (i) => setTopics((t) => t.filter((_, idx) => idx !== i));
-  const nextFromTopics = (pendingTopic) => {
-    const trimmedTopic = tempTopic.trim();
-    const trimmedContext = tempContext.trim();
-    const topicToAdd = pendingTopic
-      ? pendingTopic
-      : trimmedTopic
-      ? {
-          id: uuid(),
-          name: trimmedTopic,
-          context: trimmedContext,
-        }
-      : null;
-    const totalTopics = topicToAdd ? [...topics, topicToAdd] : topics;
-    if (!totalTopics.length) {
-      alert("Please enter a topic (context optional) before continuing.");
-      return;
-    }
-    if (topicToAdd) {
-      addTopic(topicToAdd);
+  const removeTopic = (i) =>
+    setTopics((t) => {
+      const removed = t[i];
+      const next = t.filter((_, idx) => idx !== i);
+      if (removed?.id === editingTopicId) {
+        setEditingTopicId(null);
+        setTempTopic("");
+        setTempContext("");
+      }
+      return next;
+    });
+  const startEditingTopic = (topic) => {
+    setEditingTopicId(topic.id);
+    setTempTopic(topic.name);
+    setTempContext(topic.context || "");
+  };
+  const cancelEditingTopic = () => {
+    setEditingTopicId(null);
+    setTempTopic("");
+    setTempContext("");
+  };
+  const nextFromTopics = ({ pendingTopic, topicsPayload, isEditing }) => {
+    if (isEditing) {
+      setTopics(topicsPayload);
+      setEditingTopicId(null);
+      setTempTopic("");
+      setTempContext("");
+    } else if (pendingTopic) {
+      addTopic(pendingTopic);
       setTempTopic("");
       setTempContext("");
     }
@@ -1367,6 +1417,9 @@ function ContentOSApp() {
             setTempTopic={setTempTopic}
             tempContext={tempContext}
             setTempContext={setTempContext}
+            editingTopicId={editingTopicId}
+            startEditingTopic={startEditingTopic}
+            cancelEditingTopic={cancelEditingTopic}
             nextFromTopics={nextFromTopics}
           />
         )}
