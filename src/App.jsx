@@ -213,7 +213,6 @@ function Field({ label, value, onChange, placeholder }) {
 
 function TopicEditor({
   topics,
-  moveTopic,
   removeTopic,
   tempTopic,
   setTempTopic,
@@ -223,6 +222,9 @@ function TopicEditor({
   onEditTopic,
   onCancelEdit,
 }) {
+  const hasTopic = topics.length > 0;
+  const inputDisabled = hasTopic && !editingTopicId;
+
   return (
     <div>
       {editingTopicId && (
@@ -242,19 +244,30 @@ function TopicEditor({
           value={tempTopic}
           onChange={(e) => setTempTopic(e.target.value)}
           placeholder="Topic e.g., Pricing AI agents"
-          className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+          disabled={inputDisabled}
+          className={`bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 ${
+            inputDisabled ? "opacity-60 cursor-not-allowed" : ""
+          }`}
         />
         <textarea
           value={tempContext}
           onChange={(e) => setTempContext(e.target.value)}
           placeholder="Optional context for this topic..."
           rows={3}
-          className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+          disabled={inputDisabled}
+          className={`bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 ${
+            inputDisabled ? "opacity-60 cursor-not-allowed" : ""
+          }`}
         />
       </div>
+      {inputDisabled && (
+        <p className="text-sm text-slate-300">
+          Only one topic can be saved. Use edit to update or remove to clear it.
+        </p>
+      )}
       {!!topics.length && (
         <ul className="space-y-2">
-          {topics.map((t, i) => (
+          {topics.slice(0, 1).map((t) => (
             <li
               key={t.id}
               className="bg-[#151a32] border border-[#232941] rounded-lg p-3"
@@ -270,19 +283,7 @@ function TopicEditor({
                   </button>
                   <button
                     className="bg-[#242a4f] px-2 py-1 rounded"
-                    onClick={() => moveTopic(i, -1)}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    className="bg-[#242a4f] px-2 py-1 rounded"
-                    onClick={() => moveTopic(i, 1)}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    className="bg-[#242a4f] px-2 py-1 rounded"
-                    onClick={() => removeTopic(i)}
+                    onClick={() => removeTopic(0)}
                   >
                     Remove
                   </button>
@@ -446,7 +447,6 @@ function BrandPage({ brand, setBrand, saveBrand, webhooks }) {
 
 function TopicsPage({
   topics,
-  moveTopic,
   removeTopic,
   tempTopic,
   setTempTopic,
@@ -475,6 +475,10 @@ function TopicsPage({
           : topic
       );
     } else if (trimmedTopic) {
+      if (topics.length >= 1) {
+        alert("Only one topic is allowed. Edit the existing topic to make changes.");
+        return;
+      }
       pendingTopic = {
         id: uuid(),
         name: trimmedTopic,
@@ -501,7 +505,6 @@ function TopicsPage({
       </header>
       <TopicEditor
         topics={topics}
-        moveTopic={moveTopic}
         removeTopic={removeTopic}
         tempTopic={tempTopic}
         setTempTopic={setTempTopic}
@@ -945,6 +948,11 @@ function ContentOSApp() {
     style: "",
   });
   const [topics, setTopics] = useLocal("contentos.topics", []);
+  useEffect(() => {
+    if (topics.length > 1) {
+      setTopics([topics[0]]);
+    }
+  }, [topics, setTopics]);
   const [editingTopicId, setEditingTopicId] = useState(null);
   const [tempTopic, setTempTopic] = useState("");
   const [tempContext, setTempContext] = useState("");
@@ -997,15 +1005,7 @@ function ContentOSApp() {
   });
 
   // topic helpers
-  const addTopic = (topic) => setTopics((t) => [...t, topic]);
-  const moveTopic = (i, dir) =>
-    setTopics((t) => {
-      const n = [...t];
-      const j = i + dir;
-      if (j < 0 || j >= n.length) return n;
-      [n[i], n[j]] = [n[j], n[i]];
-      return n;
-    });
+  const addTopic = (topic) => setTopics([topic]);
   const removeTopic = (i) =>
     setTopics((t) => {
       const removed = t[i];
@@ -1327,7 +1327,6 @@ function ContentOSApp() {
         {view === "topics" && (
           <TopicsPage
             topics={topics}
-            moveTopic={moveTopic}
             removeTopic={removeTopic}
             tempTopic={tempTopic}
             setTempTopic={setTempTopic}
