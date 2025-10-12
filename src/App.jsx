@@ -382,34 +382,47 @@ function BrandPage({ brand, setBrand, saveBrand, webhooks }) {
                   className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
                 />
               </label>
-              <label className="flex flex-col gap-2 text-sm">
-                Values (comma-separated)
-                <input
-                  value={brand.values}
-                  onChange={(e) => setBrand({ ...brand, values: e.target.value })}
-                  placeholder="clarity, control, optimise"
-                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm">
-                Signature Phrases
-                <input
-                  value={brand.phrases}
-                  onChange={(e) => setBrand({ ...brand, phrases: e.target.value })}
-                  placeholder="Model Your Success™, chaos → clarity…"
-                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm md:col-span-2">
-                Style Notes
-                <textarea
-                  value={brand.style}
-                  onChange={(e) => setBrand({ ...brand, style: e.target.value })}
-                  rows={4}
-                  placeholder="Short sentences, UK spelling…"
-                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                />
-              </label>
+              <details className="md:col-span-2">
+                <summary className="cursor-pointer text-sm font-medium text-slate-200 py-2">
+                  Additional Voice Details
+                </summary>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <label className="flex flex-col gap-2 text-sm md:col-span-2">
+                    Values (comma-separated)
+                    <input
+                      value={brand.values}
+                      onChange={(e) =>
+                        setBrand({ ...brand, values: e.target.value })
+                      }
+                      placeholder="clarity, control, optimise"
+                      className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm md:col-span-2">
+                    Signature Phrases
+                    <input
+                      value={brand.phrases}
+                      onChange={(e) =>
+                        setBrand({ ...brand, phrases: e.target.value })
+                      }
+                      placeholder="Model Your Success™, chaos → clarity…"
+                      className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm md:col-span-2">
+                    Style Notes
+                    <textarea
+                      value={brand.style}
+                      onChange={(e) =>
+                        setBrand({ ...brand, style: e.target.value })
+                      }
+                      rows={4}
+                      placeholder="Short sentences, UK spelling…"
+                      className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                    />
+                  </label>
+                </div>
+              </details>
             </form>
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-4 mt-4">
               <div className="flex flex-col">
