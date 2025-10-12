@@ -146,11 +146,11 @@ async function postWebhook(url, type, data) {
 }
 
 const WEBHOOKS = {
-  startSession: "http://localhost:5678/webhook/3c135f0d-ffad-4324-b30e-eaed69086ae7",
-  brandProfile: "http://localhost:5678/webhook/8787372f-aa37-4295-af51-f18c0b7d6a65",
-  topicsContinue: "http://localhost:5678/webhook/afcecf7d-65e8-48c8-8205-7eec66e72f15",
-  snapshotGenerate: "http://localhost:5678/webhook/8792d1e2-8c5b-457f-96b0-63bca95e9ab4",
-  articleGenerate: "http://localhost:5678/webhook/b30e07dc-0218-493a-a99f-3e0ad96429fc",
+  startSession: "http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7",
+  brandProfile: "http://localhost:5678/webhook-test/8787372f-aa37-4295-af51-f18c0b7d6a65",
+  topicsContinue: "http://localhost:5678/webhook-test/afcecf7d-65e8-48c8-8205-7eec66e72f15",
+  snapshotGenerate: "http://localhost:5678/webhook-test/8792d1e2-8c5b-457f-96b0-63bca95e9ab4",
+  articleGenerate: "http://localhost:5678/webhook-test/b30e07dc-0218-493a-a99f-3e0ad96429fc",
   snapshotChange:
     "http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41",
 };
@@ -706,7 +706,7 @@ function SnapshotPage({
             <input
               value={n8n.webhook}
               onChange={(e) => setN8N({ ...n8n, webhook: e.target.value })}
-              placeholder="https://your-n8n-host/webhook/xxxx"
+              placeholder="https://your-n8n-host/webhook-test/xxxx"
               className="mt-2 w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
             />
           </label>
@@ -869,7 +869,7 @@ function ArticlePage({
             <input
               value={n8n.webhook}
               onChange={(e) => setN8N({ ...n8n, webhook: e.target.value })}
-              placeholder="https://your-n8n-host/webhook/xxxx"
+              placeholder="https://your-n8n-host/webhook-test/xxxx"
               className="mt-2 w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
             />
           </label>
