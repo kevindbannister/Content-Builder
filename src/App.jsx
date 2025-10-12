@@ -304,7 +304,7 @@ function TopicEditor({
 // Page components
 // ----------------------
 function BrandPage({ brand, setBrand, saveBrand, webhooks }) {
-  const [showBrandDetails, setShowBrandDetails] = useState(false);
+  const [showBrandDetails, setShowBrandDetails] = useState(true);
   const handleSaveAndContinue = async () => {
     await postWebhook(
       webhooks.brandProfile,
