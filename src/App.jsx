@@ -111,10 +111,11 @@ async function postWebhook(url, type, data) {
 }
 
 const WEBHOOKS = {
-  startSession:
-    "http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7",
-  brandProfile:
-    "http://localhost:5678/webhook-test/8787372f-aa37-4295-af51-f18c0b7d6a65",
+  startSession: "http://localhost:5678/webhook/3c135f0d-ffad-4324-b30e-eaed69086ae7",
+  brandProfile: "http://localhost:5678/webhook/8787372f-aa37-4295-af51-f18c0b7d6a65",
+  topicsContinue: "http://localhost:5678/webhook/afcecf7d-65e8-48c8-8205-7eec66e72f15",
+  snapshotGenerate: "http://localhost:5678/webhook/6072bf62-823b-46a8-8362-2785e0659d2e",
+  articleGenerate: "http://localhost:5678/webhook/b30e07dc-0218-493a-a99f-3e0ad96429fc",
   snapshotChange:
     "http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41",
 };
@@ -456,6 +457,7 @@ function TopicsPage({
   startEditingTopic,
   cancelEditingTopic,
   nextFromTopics,
+  webhooks,
 }) {
   const handleNext = async () => {
     const trimmedTopic = tempTopic.trim();
@@ -491,11 +493,11 @@ function TopicsPage({
       alert("Please enter a topic (context optional) before continuing.");
       return;
     }
-    await postWebhook(
-      "http://localhost:5678/webhook-test/3b79f412-93b8-4467-9e34-62b323d3623a",
-      "topics_continue_click",
-      { topics: topicsPayload }
-    );
+    if (webhooks?.topicsContinue) {
+      await postWebhook(webhooks.topicsContinue, "topics_continue_click", {
+        topics: topicsPayload,
+      });
+    }
     nextFromTopics({ pendingTopic, topicsPayload, isEditing });
   };
   return (
@@ -522,7 +524,7 @@ function TopicsPage({
           Continue
         </button>
         <p className="mt-1 text-xs italic text-slate-400">
-          http://localhost:5678/webhook-test/3b79f412-93b8-4467-9e34-62b323d3623a
+          {webhooks?.topicsContinue}
         </p>
       </div>
     </section>
@@ -541,7 +543,31 @@ function SnapshotPage({
   sendSnapshotChange,
   navTo,
   webhooks,
+  brand,
 }) {
+  const [generatingSnapshot, setGeneratingSnapshot] = useState(false);
+  const requestSnapshot = async () => {
+    if (!webhooks?.snapshotGenerate || generatingSnapshot) return;
+    try {
+      setGeneratingSnapshot(true);
+      const ok = await postWebhook(
+        webhooks.snapshotGenerate,
+        "snapshot_generate_request",
+        {
+          snapshotText: snapshot.text,
+          topics,
+          brand,
+        }
+      );
+      if (!ok) throw new Error("HTTP error");
+      alert("Requested delivery snapshot generation ✔︎");
+    } catch (e) {
+      console.error(e);
+      alert("Could not reach the delivery snapshot webhook.");
+    } finally {
+      setGeneratingSnapshot(false);
+    }
+  };
   return (
     <section className="min-h-screen px-[7vw] py-16">
       <header className="mb-4">
@@ -576,6 +602,22 @@ function SnapshotPage({
       )}
 
       <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+          <h3 className="text-lg font-semibold">Delivery Snapshot Draft</h3>
+          <div className="flex flex-col items-start sm:items-end">
+            <button
+              type="button"
+              onClick={requestSnapshot}
+              disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
+              className="bg-[#222845] border border-[#2a3357] text-white font-bold px-4 py-2 rounded-xl disabled:opacity-60"
+            >
+              {generatingSnapshot ? "Requesting…" : "Generate My Delivery Snapshot"}
+            </button>
+            <p className="mt-1 text-xs italic text-slate-400 text-left sm:text-right">
+              {webhooks?.snapshotGenerate}
+            </p>
+          </div>
+        </div>
         <label className="block text-sm">
           Snapshot (free-form)
           <textarea
@@ -657,6 +699,7 @@ function ArticlePage({
   sendArticleChange,
   navTo,
   setN8N,
+  webhooks,
 }) {
   const handleArticleChangeKeyDown = (event) => {
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
@@ -666,6 +709,29 @@ function ArticlePage({
       }
     }
   };
+  const [generatingArticle, setGeneratingArticle] = useState(false);
+  const requestArticle = async () => {
+    if (!webhooks?.articleGenerate || generatingArticle) return;
+    try {
+      setGeneratingArticle(true);
+      const ok = await postWebhook(
+        webhooks.articleGenerate,
+        "article_generate_request",
+        {
+          articleContent: article.content,
+          topics,
+          brand,
+        }
+      );
+      if (!ok) throw new Error("HTTP error");
+      alert("Requested article generation ✔︎");
+    } catch (e) {
+      console.error(e);
+      alert("Could not reach the article webhook.");
+    } finally {
+      setGeneratingArticle(false);
+    }
+  };
 
   return (
     <section className="min-h-screen px-[7vw] py-16">
@@ -673,6 +739,22 @@ function ArticlePage({
         <h2 className="text-2xl font-semibold">Article</h2>
       </header>
       <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+          <h3 className="text-lg font-semibold">Article Draft</h3>
+          <div className="flex flex-col items-start sm:items-end">
+            <button
+              type="button"
+              onClick={requestArticle}
+              disabled={generatingArticle || !webhooks?.articleGenerate}
+              className="bg-[#222845] border border-[#2a3357] text-white font-bold px-4 py-2 rounded-xl disabled:opacity-60"
+            >
+              {generatingArticle ? "Requesting…" : "Generate My Article"}
+            </button>
+            <p className="mt-1 text-xs italic text-slate-400 text-left sm:text-right">
+              {webhooks?.articleGenerate}
+            </p>
+          </div>
+        </div>
         <label className="block text-sm">
           Article (free-form)
           <textarea
@@ -941,6 +1023,19 @@ function ContentOSApp() {
     const startedAt = new Date().toISOString();
     setSession({ id, startedAt });
     setLocks({ brand: false });
+    (async () => {
+      try {
+        const ok = await postWebhook(WEBHOOKS.startSession, "session_start", {
+          sessionId: id,
+          startedAt,
+        });
+        if (!ok) {
+          console.error("Session start webhook responded with non-200");
+        }
+      } catch (err) {
+        console.error("Session start webhook failed:", err);
+      }
+    })();
     return id;
   };
 
@@ -1355,6 +1450,7 @@ function ContentOSApp() {
             startEditingTopic={startEditingTopic}
             cancelEditingTopic={cancelEditingTopic}
             nextFromTopics={nextFromTopics}
+            webhooks={WEBHOOKS}
           />
         )}
         {view === "snapshot" && (
@@ -1370,6 +1466,7 @@ function ContentOSApp() {
             sendSnapshotChange={sendSnapshotChange}
             navTo={navTo}
             webhooks={WEBHOOKS}
+            brand={brand}
           />
         )}
         {view === "article" && (
@@ -1385,6 +1482,7 @@ function ContentOSApp() {
             sendArticleChange={sendArticleChange}
             navTo={navTo}
             setN8N={setN8N}
+            webhooks={WEBHOOKS}
           />
         )}
         {view === "social" && (
