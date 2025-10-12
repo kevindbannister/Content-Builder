@@ -1,21 +1,10 @@
-import React, { useState } from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App.jsx";
-import "./index.css";
-import WelcomeOverlay from "./WelcomeOverlay.jsx";
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { HashRouter } from 'react-router-dom'
+import App from './App.jsx'
 
-function Boot() {
-  const [show, setShow] = useState(() => {
-    try { return !localStorage.getItem("contentos.hideWelcome"); }
-    catch { return true; }
-  });
-
-  return (
-    <>
-      {show && <WelcomeOverlay onStart={() => setShow(false)} />}
-      <App />
-    </>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<Boot />);
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <HashRouter>
+    <App />
+  </HashRouter>
+)
