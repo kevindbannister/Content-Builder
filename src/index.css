@@ -12,44 +12,6 @@ body {
     sans-serif;
 }
 
-.snapshot-preview-content {
-  color: #e2e8f0;
-}
-
-.snapshot-preview-content h1,
-.snapshot-preview-content h2,
-.snapshot-preview-content h3,
-.snapshot-preview-content h4 {
-  font-weight: 700;
-  margin: 1rem 0 0.5rem;
-}
-
-.snapshot-preview-content p {
-  margin: 0.75rem 0;
-}
-
-.snapshot-preview-content ul,
-.snapshot-preview-content ol {
-  margin: 0.75rem 0 0.75rem 1.25rem;
-  padding-left: 1.25rem;
-}
-
-.snapshot-preview-content blockquote {
-  margin: 1rem 0;
-  padding-left: 1rem;
-  border-left: 3px solid #2a3357;
-  color: #cbd5f5;
-  font-style: italic;
-}
-
-.snapshot-preview-content strong {
-  font-weight: 700;
-}
-
-.snapshot-preview-content em {
-  font-style: italic;
-}
-
 .rich-text-editor {
   color: #e2e8f0;
   line-height: 1.6;

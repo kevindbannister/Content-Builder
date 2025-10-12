@@ -51,6 +51,61 @@ function ensureHtmlContent(value) {
     .join("");
 }
 
+const SNAPSHOT_TEXT_KEYS = [
+  "html",
+  "text",
+  "snapshot",
+  "content",
+  "body",
+  "deliverySnapshot",
+  "delivery_snapshot",
+  "result",
+  "data",
+];
+
+function extractSnapshotText(raw) {
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+
+    const findString = (value, visited = new Set()) => {
+      if (!value || visited.has(value)) return "";
+      if (typeof value === "string") return value;
+      if (typeof value !== "object") return "";
+
+      visited.add(value);
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const found = findString(item, visited);
+          if (found) return found;
+        }
+        return "";
+      }
+
+      for (const key of SNAPSHOT_TEXT_KEYS) {
+        if (key in value) {
+          const found = findString(value[key], visited);
+          if (found) return found;
+        }
+      }
+
+      for (const key of Object.keys(value)) {
+        if (SNAPSHOT_TEXT_KEYS.includes(key)) continue;
+        const found = findString(value[key], visited);
+        if (found) return found;
+      }
+
+      return "";
+    };
+
+    const extracted = findString(parsed);
+    return extracted || raw;
+  } catch {
+    return raw;
+  }
+}
+
 function isHtmlEmpty(value) {
   if (!value) return true;
   const textOnly = value
@@ -725,8 +780,11 @@ function SnapshotPage({
         }),
       });
       if (!res.ok) throw new Error("HTTP error");
-      const text = await res.text();
-      setSnapshot({ text: text.trim() ? ensureHtmlContent(text) : "" });
+      const rawText = await res.text();
+      const extracted = extractSnapshotText(rawText).trim();
+      setSnapshot({
+        text: extracted ? ensureHtmlContent(extracted) : "",
+      });
       alert("Requested delivery snapshot generation ✔︎");
     } catch (e) {
       console.error(e);
@@ -803,16 +861,6 @@ function SnapshotPage({
         >
           Save & Continue →
         </button>
-        <div className="mt-3 bg-[#0a0f22] border border-dashed border-[#2a3357] rounded-xl p-3 text-sm leading-relaxed">
-          {isHtmlEmpty(snapshot.text) ? (
-            <span className="text-slate-500">—</span>
-          ) : (
-            <div
-              className="snapshot-preview-content"
-              dangerouslySetInnerHTML={{ __html: snapshot.text }}
-            />
-          )}
-        </div>
       </div>
 
       <div className="mt-6 bg-[#121629] border border-[#232941] rounded-2xl p-4">
