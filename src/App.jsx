@@ -1,5 +1,40 @@
 import React, { useEffect, useMemo, useState } from "react";
 
+const APP_VERSION =
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+const VERSION_STORAGE_KEY = "contentos.version";
+const LOCAL_STORAGE_KEYS = [
+  "contentos.session",
+  "contentos.locks",
+  "contentos.refdata",
+  "contentos.brand",
+  "contentos.topics",
+  "contentos.snapshot",
+  "contentos.article",
+  "contentos.podcast",
+  "contentos.social.design",
+  "contentos.n8n",
+];
+
+if (typeof window !== "undefined") {
+  try {
+    const storedVersion = window.localStorage.getItem(VERSION_STORAGE_KEY);
+    if (storedVersion !== APP_VERSION) {
+      LOCAL_STORAGE_KEYS.forEach((key) => {
+        try {
+          window.localStorage.removeItem(key);
+        } catch {}
+      });
+      window.localStorage.setItem(VERSION_STORAGE_KEY, APP_VERSION);
+      if (storedVersion) {
+        window.location.reload();
+      }
+    }
+  } catch (error) {
+    console.warn("Version sync skipped due to storage access issue", error);
+  }
+}
+
 // ContentOS — React Single-File Preview (clean, router-ready structure)
 // This canvas version is self-contained and compiles on its own.
 // It mirrors the structure we'll use in a Vite + React Router + TS app.
@@ -999,6 +1034,12 @@ function PodcastPage({ podcast, setPodcast }) {
 // App Shell (router-like nav + state)
 // ----------------------
 function ContentOSApp() {
+  const displayVersion = useMemo(() => {
+    if (!APP_VERSION || APP_VERSION === "dev") return "dev";
+    const [major, minor] = APP_VERSION.split(".");
+    return [major, minor].filter(Boolean).join(".") || APP_VERSION;
+  }, []);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // navigation (hash-style to keep canvas happy)
   const getViewFromHash = () => {
@@ -1431,12 +1472,17 @@ function ContentOSApp() {
               })[view] ?? "ContentOS"}
             </div>
           </div>
-          <button
-            onClick={resetSession}
-            className="px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
-          >
-            New
-          </button>
+          <div className="flex items-center gap-2 text-slate-200/80">
+            <button
+              onClick={resetSession}
+              className="px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
+            >
+              New
+            </button>
+            <span className="text-[11px] uppercase tracking-wide">
+              Ver {displayVersion}
+            </span>
+          </div>
         </div>
 
         <Stepper current={currentIndex} steps={steps} />
