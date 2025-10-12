@@ -349,6 +349,7 @@ function WelcomePage({
 }
 
 function BrandPage({ brand, setBrand, saveBrand, webhooks }) {
+  const [showBrandDetails, setShowBrandDetails] = useState(false);
   const handleSaveAndContinue = async () => {
     await postWebhook(
       webhooks.brandProfile,
@@ -362,112 +363,115 @@ function BrandPage({ brand, setBrand, saveBrand, webhooks }) {
       <header className="mb-4">
         <h2 className="text-2xl font-semibold">Your Brand Voice</h2>
       </header>
-      <form
-        className="grid md:grid-cols-2 gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-        }}
-      >
-        <label className="flex flex-col gap-2 text-sm">
-          Archetype
-          <select
-            value={brand.archetype}
-            onChange={(e) => setBrand({ ...brand, archetype: e.target.value })}
-            className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-          >
-            <option value="">Select…</option>
-            {[
-              "Magician",
-              "Sage",
-              "Hero",
-              "Rebel",
-              "Explorer",
-              "Caregiver",
-              "Creator",
-              "Ruler",
-              "Everyperson",
-              "Innocent",
-              "Jester",
-              "Lover",
-            ].map((a) => (
-              <option key={a}>{a}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-2 text-sm">
-          Tone of Voice
-          <input
-            value={brand.tone}
-            onChange={(e) => setBrand({ ...brand, tone: e.target.value })}
-            placeholder="clear, bold, human…"
-            className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm">
-          Audience
-          <input
-            value={brand.audience}
-            onChange={(e) => setBrand({ ...brand, audience: e.target.value })}
-            placeholder="KBB retailers, UK SMB owners…"
-            className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm">
-          Values (comma-separated)
-          <input
-            value={brand.values}
-            onChange={(e) => setBrand({ ...brand, values: e.target.value })}
-            placeholder="clarity, control, optimise"
-            className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm">
-          Signature Phrases
-          <input
-            value={brand.phrases}
-            onChange={(e) => setBrand({ ...brand, phrases: e.target.value })}
-            placeholder="Model Your Success™, chaos → clarity…"
-            className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm">
-          Style Notes
-          <textarea
-            value={brand.style}
-            onChange={(e) => setBrand({ ...brand, style: e.target.value })}
-            rows={4}
-            placeholder="Short sentences, UK spelling…"
-            className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-          />
-        </label>
-      </form>
-      <div className="flex gap-3 mt-4">
-        <div className="flex flex-col">
-          <button
-            onClick={handleSaveAndContinue}
-            className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
-          >
-            Save & Continue
-          </button>
-          <p className="mt-1 text-xs italic text-slate-400">
-            {webhooks.brandProfile}
-          </p>
-        </div>
+      <div className="bg-[#121629] border border-[#232941] rounded-2xl">
         <button
-          onClick={() =>
-            setBrand({
-              archetype: "Sage",
-              tone: "clear, candid, practical",
-              audience: "UK KBB retailers and SMB owners",
-              values: "clarity, control, optimise",
-              phrases: "Model Your Success™, action creates clarity",
-              style: "Short sentences. UK spelling. Avoid fluff.",
-            })
-          }
-          className="bg-[#222845] border border-[#2a3357] px-4 py-2 rounded-xl"
+          type="button"
+          onClick={() => setShowBrandDetails((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-200"
         >
-          Load Sample
+          <span>Brand voice details</span>
+          <span className="text-lg">{showBrandDetails ? "▾" : "▸"}</span>
         </button>
+        {showBrandDetails && (
+          <div className="border-t border-[#232941] px-4 pb-4 pt-3">
+            <form
+              className="grid md:grid-cols-2 gap-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+              }}
+            >
+              <label className="flex flex-col gap-2 text-sm">
+                Archetype
+                <select
+                  value={brand.archetype}
+                  onChange={(e) =>
+                    setBrand({ ...brand, archetype: e.target.value })
+                  }
+                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                >
+                  <option value="">Select…</option>
+                  {[
+                    "Magician",
+                    "Sage",
+                    "Hero",
+                    "Rebel",
+                    "Explorer",
+                    "Caregiver",
+                    "Creator",
+                    "Ruler",
+                    "Everyperson",
+                    "Innocent",
+                    "Jester",
+                    "Lover",
+                  ].map((a) => (
+                    <option key={a}>{a}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm">
+                Tone of Voice
+                <input
+                  value={brand.tone}
+                  onChange={(e) => setBrand({ ...brand, tone: e.target.value })}
+                  placeholder="clear, bold, human…"
+                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm">
+                Audience
+                <input
+                  value={brand.audience}
+                  onChange={(e) =>
+                    setBrand({ ...brand, audience: e.target.value })
+                  }
+                  placeholder="KBB retailers, UK SMB owners…"
+                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm">
+                Values (comma-separated)
+                <input
+                  value={brand.values}
+                  onChange={(e) => setBrand({ ...brand, values: e.target.value })}
+                  placeholder="clarity, control, optimise"
+                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm">
+                Signature Phrases
+                <input
+                  value={brand.phrases}
+                  onChange={(e) => setBrand({ ...brand, phrases: e.target.value })}
+                  placeholder="Model Your Success™, chaos → clarity…"
+                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm md:col-span-2">
+                Style Notes
+                <textarea
+                  value={brand.style}
+                  onChange={(e) => setBrand({ ...brand, style: e.target.value })}
+                  rows={4}
+                  placeholder="Short sentences, UK spelling…"
+                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                />
+              </label>
+            </form>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-4 mt-4">
+              <div className="flex flex-col">
+                <button
+                  onClick={handleSaveAndContinue}
+                  className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+                >
+                  Save & Continue
+                </button>
+                <p className="mt-1 text-xs italic text-slate-400">
+                  {webhooks.brandProfile}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -556,7 +560,16 @@ function SnapshotPage({
       </header>
       {!!topics.length && (
         <div className="mb-4 bg-[#121629] border border-[#232941] rounded-2xl p-4">
-          <div className="text-sm text-slate-300 mb-2">Selected topics</div>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm text-slate-300">Selected topics</span>
+            <button
+              type="button"
+              onClick={() => navTo("topics")}
+              className="text-xs font-semibold px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
+            >
+              Change Topic
+            </button>
+          </div>
           <ul className="grid md:grid-cols-2 gap-3">
             {topics.map((t) => (
               <li
