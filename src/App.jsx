@@ -544,22 +544,32 @@ function SnapshotPage({
   navTo,
   webhooks,
   brand,
+  ensureSessionId,
 }) {
   const [generatingSnapshot, setGeneratingSnapshot] = useState(false);
   const requestSnapshot = async () => {
     if (!webhooks?.snapshotGenerate || generatingSnapshot) return;
     try {
       setGeneratingSnapshot(true);
-      const ok = await postWebhook(
-        webhooks.snapshotGenerate,
-        "snapshot_generate_request",
-        {
-          snapshotText: snapshot.text,
-          topics,
-          brand,
-        }
-      );
-      if (!ok) throw new Error("HTTP error");
+      const payload = {
+        snapshotText: snapshot.text,
+        topic: topics[0] ?? null,
+        topics,
+        brand,
+        sessionId: ensureSessionId(),
+      };
+      const res = await fetch(webhooks.snapshotGenerate, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "snapshot_generate_request",
+          timestamp: new Date().toISOString(),
+          ...payload,
+        }),
+      });
+      if (!res.ok) throw new Error("HTTP error");
+      const text = await res.text();
+      setSnapshot({ text: text.trim() ? text : "" });
       alert("Requested delivery snapshot generation ✔︎");
     } catch (e) {
       console.error(e);
@@ -1038,6 +1048,7 @@ function ContentOSApp() {
     })();
     return id;
   };
+  const ensureSessionId = () => session.id || startNewSession();
 
   const [locks, setLocks] = useLocal("contentos.locks", {
     brand: false,
@@ -1186,7 +1197,7 @@ function ContentOSApp() {
       type: "brand_profile",
       source: "contentos.app",
       brand,
-      sessionId: session.id || startNewSession(),
+      sessionId: ensureSessionId(),
       url: window.location?.href || "",
       hash: window.location?.hash || "",
       storage: storageDump,
@@ -1467,6 +1478,7 @@ function ContentOSApp() {
             navTo={navTo}
             webhooks={WEBHOOKS}
             brand={brand}
+            ensureSessionId={ensureSessionId}
           />
         )}
         {view === "article" && (
