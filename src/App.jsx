@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const APP_VERSION =
   typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
@@ -15,6 +15,124 @@ const LOCAL_STORAGE_KEYS = [
   "contentos.social.design",
   "contentos.n8n",
 ];
+
+const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*>/i;
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function ensureHtmlContent(value) {
+  if (!value) return "";
+  if (HTML_TAG_PATTERN.test(value)) return value;
+
+  const escaped = escapeHtml(value);
+
+  const paragraphs = escaped
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  if (!paragraphs.length) {
+    const singleLine = escaped.replace(/\n/g, "<br>");
+    return singleLine ? `<p>${singleLine}</p>` : "";
+  }
+
+  return paragraphs
+    .map((paragraph) => {
+      const withBreaks = paragraph.replace(/\n/g, "<br>");
+      return `<p>${withBreaks || "<br>"}</p>`;
+    })
+    .join("");
+}
+
+function isHtmlEmpty(value) {
+  if (!value) return true;
+  const textOnly = value
+    .replace(/<br\s*\/?>(\s|&nbsp;)*/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+  return textOnly.length === 0;
+}
+
+function RichTextEditor({ value, onChange, placeholder }) {
+  const editorRef = useRef(null);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const normalized = ensureHtmlContent(value);
+    if (normalized !== value) {
+      onChange(normalized);
+      return;
+    }
+    if (editorRef.current.innerHTML !== (normalized || "")) {
+      editorRef.current.innerHTML = normalized || "";
+    }
+  }, [value, onChange]);
+
+  const handleInput = (event) => {
+    onChange(event.currentTarget.innerHTML);
+  };
+
+  const applyCommand = (command, commandValue) => {
+    if (typeof document === "undefined" || !editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(command, false, commandValue ?? null);
+    onChange(editorRef.current.innerHTML);
+  };
+
+  const toolbarButtons = [
+    { label: "H2", command: "formatBlock", value: "h2" },
+    { label: "H3", command: "formatBlock", value: "h3" },
+    { label: "Bold", command: "bold" },
+    { label: "Italic", command: "italic" },
+    { label: "UL", command: "insertUnorderedList" },
+    { label: "OL", command: "insertOrderedList" },
+    { label: "Quote", command: "formatBlock", value: "blockquote" },
+  ];
+
+  const showPlaceholder = isHtmlEmpty(value);
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {toolbarButtons.map((button) => (
+          <button
+            key={`${button.command}-${button.value ?? "default"}`}
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => applyCommand(button.command, button.value)}
+            className="bg-[#1a2037] border border-[#2a3357] text-xs uppercase tracking-wide text-slate-200 px-3 py-1.5 rounded-lg"
+          >
+            {button.label}
+          </button>
+        ))}
+      </div>
+      <div className="relative">
+        <div
+          ref={editorRef}
+          className="rich-text-editor w-full bg-[#0f1427] border border-[#232941] rounded-xl p-3 min-h-[220px] text-sm leading-relaxed focus:outline-none"
+          contentEditable
+          role="textbox"
+          aria-multiline="true"
+          onInput={handleInput}
+          onBlur={handleInput}
+        />
+        {showPlaceholder && (
+          <span className="pointer-events-none absolute left-3 top-3 text-sm text-slate-500">
+            {placeholder}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 if (typeof window !== "undefined") {
   try {
@@ -608,7 +726,7 @@ function SnapshotPage({
       });
       if (!res.ok) throw new Error("HTTP error");
       const text = await res.text();
-      setSnapshot({ text: text.trim() ? text : "" });
+      setSnapshot({ text: text.trim() ? ensureHtmlContent(text) : "" });
       alert("Requested delivery snapshot generation ✔︎");
     } catch (e) {
       console.error(e);
@@ -669,13 +787,13 @@ function SnapshotPage({
         </div>
         <label className="block text-sm">
           Snapshot (free-form)
-          <textarea
-            value={snapshot.text}
-            onChange={(e) => setSnapshot({ text: e.target.value })}
-            rows={12}
-            placeholder="This will be filled automatically by n8n later…"
-            className="w-full bg-[#0f1427] border border-[#232941] rounded-xl p-3 mt-2"
-          />
+          <div className="mt-2">
+            <RichTextEditor
+              value={snapshot.text}
+              onChange={(html) => setSnapshot({ text: html })}
+              placeholder="This will be filled automatically by n8n later…"
+            />
+          </div>
         </label>
         <button
           onClick={() => {
@@ -685,9 +803,16 @@ function SnapshotPage({
         >
           Save & Continue →
         </button>
-        <pre className="mt-3 bg-[#0a0f22] border border-dashed border-[#2a3357] rounded-xl p-3 whitespace-pre-wrap">
-          {snapshot.text || "—"}
-        </pre>
+        <div className="mt-3 bg-[#0a0f22] border border-dashed border-[#2a3357] rounded-xl p-3 text-sm leading-relaxed">
+          {isHtmlEmpty(snapshot.text) ? (
+            <span className="text-slate-500">—</span>
+          ) : (
+            <div
+              className="snapshot-preview-content"
+              dangerouslySetInnerHTML={{ __html: snapshot.text }}
+            />
+          )}
+        </div>
       </div>
 
       <div className="mt-6 bg-[#121629] border border-[#232941] rounded-2xl p-4">
