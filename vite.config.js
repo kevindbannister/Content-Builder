@@ -3,5 +3,11 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/Content-Builder/',
+  // Use a relative base path so GitHub Pages and local previews resolve assets
+  // from the same bundle without depending on the repo name.
+  base: './',
+  build: {
+    outDir: 'docs',
+    emptyOutDir: true,
+  },
 })
