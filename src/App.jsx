@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import WelcomeOverlay from "./WelcomeOverlay";
 
 // ContentOS — React Single-File Preview (clean, router-ready structure)
 // This canvas version is self-contained and compiles on its own.
@@ -938,6 +939,14 @@ function ContentOSApp() {
     welcome: false,
     brand: false,
   });
+  const [showWelcome, setShowWelcome] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return localStorage.getItem("contentos.hideWelcome") !== "1";
+    } catch {
+      return true;
+    }
+  });
   const [refdata, setRefdata] = useLocal("contentos.refdata", {
     headers: [],
     rows: [],
@@ -1467,6 +1476,14 @@ CTA: Save this and start.`,
           <PodcastPage podcast={podcast} setPodcast={setPodcast} />
         )}
       </main>
+      {showWelcome && (
+        <WelcomeOverlay
+          onStart={() => {
+            setShowWelcome(false);
+            navTo("welcome");
+          }}
+        />
+      )}
     </div>
   );
 }
