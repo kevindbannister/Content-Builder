@@ -947,6 +947,12 @@ function ContentOSApp() {
   const [locks, setLocks] = useLocal("contentos.locks", {
     brand: false,
   });
+  const [showWelcome, setShowWelcome] = useState(false);
+  useEffect(() => {
+    if (!session.id) {
+      setShowWelcome(true);
+    }
+  }, [session.id]);
   const [refdata, setRefdata] = useLocal("contentos.refdata", {
     headers: [],
     rows: [],
@@ -1214,6 +1220,7 @@ function ContentOSApp() {
     try {
       window.location.hash = "brand";
     } catch {}
+    setShowWelcome(true);
     return true;
   };
 
@@ -1461,6 +1468,42 @@ CTA: Save this and start.`,
         )}
         {view === "podcast" && (
           <PodcastPage podcast={podcast} setPodcast={setPodcast} />
+        )}
+        {showWelcome && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#06091a]/70 backdrop-blur-sm">
+            <div className="max-w-xl w-full space-y-4 rounded-3xl border border-[#232941] bg-[#121629] p-6 shadow-2xl">
+              <header className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.25em] text-indigo-300/80">
+                  ContentOS
+                </p>
+                <h2 className="text-2xl font-semibold">Welcome back</h2>
+                <p className="text-sm text-slate-300">
+                  Start a fresh session to capture your brand voice and ship a new content drop. You can always come back here by using the New button in the header.
+                </p>
+              </header>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowWelcome(false)}
+                  className="order-2 rounded-xl border border-[#2a3357] px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-[#151a32] sm:order-1"
+                >
+                  Keep exploring
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    startNewSession();
+                    setShowWelcome(false);
+                    setSidebarOpen(false);
+                    navTo("brand");
+                  }}
+                  className="order-1 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#0b1020] transition hover:bg-slate-100 sm:order-2"
+                >
+                  Start new build
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>
