@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function WelcomeOverlay({ onStart }) {
+export default function WelcomeOverlay({ onSkip, onCreate }) {
   return (
     <div
       style={{
@@ -53,7 +53,7 @@ export default function WelcomeOverlay({ onStart }) {
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button
             onClick={() => {
-              onStart?.();
+              onSkip?.();
             }}
             style={{
               padding: "10px 16px",
@@ -68,7 +68,7 @@ export default function WelcomeOverlay({ onStart }) {
           </button>
           <button
             onClick={() => {
-              onStart?.();
+              onCreate?.();
             }}
             style={{
               padding: "10px 16px",

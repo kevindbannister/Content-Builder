@@ -120,15 +120,19 @@ const WEBHOOKS = {
     "http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41",
 };
 
+const FLOW_ORDER = [
+  "brand",
+  "topics",
+  "snapshot",
+  "article",
+  "social",
+  "podcast",
+];
+
 // ----------------------
 // Icons
 // ----------------------
 const Icon = {
-  Home: (p) => (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
-      <path d="M12 3l10 9h-3v9h-6v-6H11v6H5v-9H2z" />
-    </svg>
-  ),
   Sparkles: (p) => (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
       <path d="M5 3l2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4zm11 2l1.5 3 3 1.5-3 1.5L16 12l-1.5-3L11 7.5 14.5 6 16 3zM13 13l2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4z" />
@@ -278,76 +282,6 @@ function TopicEditor({
 // ----------------------
 // Page components
 // ----------------------
-function WelcomePage({
-  session,
-  startNewSession,
-  navTo,
-  resetSession,
-  webhooks,
-}) {
-  const handleStart = async () => {
-    const id = startNewSession();
-    await postWebhook(
-      webhooks.startSession,
-      "start_session",
-      { sessionId: id }
-    );
-    navTo("brand");
-  };
-  return (
-    <section className="min-h-screen px-[7vw] pt-[14vh] pb-16">
-      <div className="flex items-center gap-3">
-        <h1 className="text-[9vw] md:text-[96px] font-extrabold leading-[1.05] tracking-wide">Welcome</h1>
-        <button
-          onClick={resetSession}
-          className="px-4 py-2 rounded-lg border border-[#2a3357] hover:bg-[#151a32] text-base"
-        >
-          New
-        </button>
-      </div>
-      <div className="mt-6 grid gap-6 max-w-3xl">
-        <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
-          <h3 className="text-lg font-semibold">Start a session</h3>
-          <p className="text-sm text-slate-300 mt-1">
-            We create a unique session ID the first time you click the button
-            below. This ID will be sent with all webhooks.
-          </p>
-          <div className="mt-3 flex items-center gap-3">
-            <div className="flex flex-col">
-              <button
-                onClick={handleStart}
-                className="bg-white text-[#0b1020] font-bold text-lg px-6 py-3 rounded-2xl shadow-xl"
-              >
-                Let's Create Your Content
-              </button>
-              <p className="mt-1 text-xs italic text-slate-400">
-                {webhooks.startSession}
-              </p>
-            </div>
-            {session.id && (
-              <div className="text-xs text-slate-300">
-                <div>
-                  <span className="opacity-70">Session:</span> {session.id}
-                </div>
-                <div>
-                  <span className="opacity-70">Started:</span>{" "}
-                  {new Date(session.startedAt).toLocaleString()}
-                </div>
-                <button
-                  onClick={resetSession}
-                  className="mt-2 bg-[#222845] border border-[#2a3357] text-white font-bold px-3 py-1.5 rounded-lg"
-                >
-                  Reset session
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function BrandPage({ brand, setBrand, saveBrand, webhooks }) {
   const handleSaveAndContinue = async () => {
     await postWebhook(
@@ -895,27 +829,22 @@ function PodcastPage({ podcast, setPodcast }) {
 function ContentOSApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // navigation (hash-style to keep canvas happy)
-  const [view, setView] = useState(() =>
-    typeof window !== "undefined" && window.location?.hash
+  const getViewFromHash = () => {
+    if (typeof window === "undefined") return FLOW_ORDER[0];
+    const hash = window.location?.hash
       ? window.location.hash.slice(1)
-      : "welcome"
-  );
+      : "";
+    return FLOW_ORDER.includes(hash) ? hash : FLOW_ORDER[0];
+  };
+
+  const [view, setView] = useState(getViewFromHash);
   useEffect(() => {
-    const onHash = () =>
-      setView(
-        window.location?.hash ? window.location.hash.slice(1) : "welcome"
-      );
+    const onHash = () => setView(getViewFromHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
   const navTo = (v) => {
-    if (
-      (locks.brand && (v === "welcome" || v === "brand")) ||
-      (locks.welcome && v === "welcome")
-    )
-      return;
-    if (view === "welcome" && v !== "welcome")
-      setLocks((l) => ({ ...l, welcome: true }));
+    if (locks.brand && v === "brand") return;
     if (view === "brand" && v !== "brand")
       setLocks((l) => ({ ...l, brand: true }));
     window.location.hash = v;
@@ -931,12 +860,11 @@ function ContentOSApp() {
     const id = uuid();
     const startedAt = new Date().toISOString();
     setSession({ id, startedAt });
-    setLocks({ welcome: true, brand: false });
+    setLocks({ brand: false });
     return id;
   };
 
   const [locks, setLocks] = useLocal("contentos.locks", {
-    welcome: false,
     brand: false,
   });
   const [showWelcome, setShowWelcome] = useState(true);
@@ -1088,12 +1016,12 @@ function ContentOSApp() {
         payload
       );
       if (!ok) throw new Error("HTTP error");
-      setLocks((l) => ({ ...l, welcome: true, brand: true }));
+      setLocks((l) => ({ ...l, brand: true }));
       navTo("topics");
     } catch (err) {
       console.error("Brand webhook failed:", err);
       if (window.confirm("Could not reach n8n. Continue to Topics anyway?")) {
-        setLocks((l) => ({ ...l, welcome: true, brand: true }));
+        setLocks((l) => ({ ...l, brand: true }));
         navTo("topics");
       }
     }
@@ -1171,7 +1099,7 @@ function ContentOSApp() {
       toDelete.forEach((k) => localStorage.removeItem(k));
     } catch {}
     setSession({ id: "", startedAt: "" });
-    setLocks({ welcome: false, brand: false });
+    setLocks({ brand: false });
     setBrand({
       archetype: "",
       tone: "",
@@ -1196,25 +1124,42 @@ function ContentOSApp() {
     });
     setN8N({ webhook: "" });
     setRefdata({ headers: [], rows: [] });
-    setView("welcome");
+    setView("brand");
     setShowWelcome(true);
     try {
-      window.location.hash = "welcome";
+      window.location.hash = "brand";
     } catch {}
     return true;
   };
 
-  const flow = [
-    "welcome",
-    "brand",
-    "topics",
-    "snapshot",
-    "article",
-    "social",
-    "podcast",
-  ];
+  const goToBrand = () => {
+    const target = FLOW_ORDER[0];
+    try {
+      window.location.hash = target;
+    } catch {}
+    setView(target);
+  };
+
+  const handleOverlaySkip = () => {
+    setLocks((l) => ({ ...(l ?? {}), brand: false }));
+    setShowWelcome(false);
+    goToBrand();
+  };
+
+  const handleOverlayCreate = async () => {
+    const sessionId = startNewSession();
+    const ok = await postWebhook(WEBHOOKS.startSession, "start_session", {
+      sessionId,
+    });
+    if (!ok) {
+      console.error("Start session webhook failed");
+    }
+    setShowWelcome(false);
+    goToBrand();
+  };
+
+  const flow = FLOW_ORDER;
   const steps = [
-    "Welcome",
     "Your Brand Voice",
     "Topics",
     "Snapshot",
@@ -1223,7 +1168,6 @@ function ContentOSApp() {
     "Podcast",
   ];
   const views = [
-    { id: "welcome", label: "Welcome", icon: Icon.Home },
     { id: "brand", label: "Your Brand Voice", icon: Icon.Sparkles },
     { id: "topics", label: "Topics", icon: Icon.List },
     { id: "snapshot", label: "Delivery Snapshot", icon: Icon.Camera },
@@ -1268,9 +1212,7 @@ function ContentOSApp() {
         </div>
         <nav className="flex flex-col gap-1">
           {views.map((v) => {
-            const disabled =
-              (locks.brand && (v.id === "welcome" || v.id === "brand")) ||
-              (locks.welcome && v.id === "welcome");
+            const disabled = locks.brand && v.id === "brand";
             const I = v.icon;
             return (
               <button
@@ -1308,7 +1250,6 @@ function ContentOSApp() {
             </button>
             <div className="text-sm opacity-70">
               {({
-                "welcome":"Welcome",
                 "brand":"Your Brand Voice",
                 "topics":"Topics",
                 "snapshot":"Delivery Snapshot",
@@ -1328,15 +1269,6 @@ function ContentOSApp() {
 
         <Stepper current={currentIndex} steps={steps} />
 
-        {view === "welcome" && (
-          <WelcomePage
-            session={session}
-            startNewSession={startNewSession}
-            navTo={navTo}
-            resetSession={resetSession}
-            webhooks={WEBHOOKS}
-          />
-        )}
         {view === "brand" && (
           <BrandPage
             brand={brand}
@@ -1472,10 +1404,8 @@ CTA: Save this and start.`,
       </main>
       {showWelcome && (
         <WelcomeOverlay
-          onStart={() => {
-            setShowWelcome(false);
-            navTo("welcome");
-          }}
+          onSkip={handleOverlaySkip}
+          onCreate={handleOverlayCreate}
         />
       )}
     </div>
