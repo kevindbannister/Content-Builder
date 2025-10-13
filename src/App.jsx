@@ -469,10 +469,25 @@ const Icon = {
 // ----------------------
 function Stepper({ current, steps }) {
   return (
-    <div className="sticky top-0 z-10 bg-transparent px-[7vw] pt-4">
-      <div className="flex items-center gap-2 text-xs text-slate-300">
+    <div className="sticky top-0 z-10 bg-transparent px-4 sm:px-[7vw] pt-4">
+      <div
+        className="flex items-center justify-center gap-2 pb-3 sm:hidden"
+        role="status"
+        aria-label={`Step ${current + 1} of ${steps.length}: ${steps[current]}`}
+      >
         {steps.map((label, i) => (
-          <div key={label} className="flex items-center gap-2">
+          <span
+            key={`mobile-${label}`}
+            className={`h-2.5 w-2.5 rounded-full transition-colors duration-200 ${
+              i === current ? "bg-white" : "bg-[#2a3357]"
+            }`}
+            aria-hidden="true"
+          />
+        ))}
+      </div>
+      <div className="hidden sm:flex items-center gap-2 text-xs text-slate-300 overflow-x-auto pb-3">
+        {steps.map((label, i) => (
+          <div key={label} className="flex items-center gap-2 flex-shrink-0">
             <div
               className={`w-7 h-7 grid place-items-center rounded-full border ${
                 i <= current
@@ -488,7 +503,7 @@ function Stepper({ current, steps }) {
               {label}
             </span>
             {i < steps.length - 1 && (
-              <div className="w-10 h-px bg-[#2a3357] mx-1" />
+              <div className="w-10 h-px bg-[#2a3357] mx-1 flex-shrink-0" />
             )}
           </div>
         ))}
