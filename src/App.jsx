@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.6";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.8";
 const VERSION_STORAGE_KEY = "contentos.version";
 const LOCAL_STORAGE_KEYS = [
   "contentos.session",
@@ -15,6 +15,7 @@ const LOCAL_STORAGE_KEYS = [
   "contentos.podcast",
   "contentos.social.design",
   "contentos.n8n",
+  "contentos.contentTypes",
 ];
 
 const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*>/i;
@@ -356,14 +357,7 @@ const WEBHOOKS = {
     "http://localhost:5678/webhook-test/04461643-7c04-4fa6-a086-c58cbb9a2bcc",
 };
 
-const FLOW_ORDER = [
-  "brand",
-  "topics",
-  "snapshot",
-  "article",
-  "social",
-  "podcast",
-];
+const FLOW_ORDER = ["topics", "snapshot", "article", "social", "podcast"];
 
 // ----------------------
 // Icons
@@ -397,6 +391,11 @@ const Icon = {
   Mic: (p) => (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
       <path d="M12 14a3 3 0 003-3V6a3 3 0 10-6 0v5a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2zM11 19h2v3h-2z" />
+    </svg>
+  ),
+  Settings: (p) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
+      <path d="M19.14 12.936a7.993 7.993 0 000-1.872l2.036-1.58a.5.5 0 00.12-.638l-1.928-3.34a.5.5 0 00-.607-.22l-2.397.96a7.994 7.994 0 00-1.62-.94l-.36-2.54A.5.5 0 0014.89 2h-3.78a.5.5 0 00-.495.426l-.36 2.54a7.994 7.994 0 00-1.62.94l-2.397-.96a.5.5 0 00-.607.22L3.703 8.486a.5.5 0 00.12.638l2.036 1.58a8.055 8.055 0 000 1.872l-2.036 1.58a.5.5 0 00-.12.638l1.928 3.34a.5.5 0 00.607.22l2.397-.96c.5.38 1.04.7 1.62.94l.36 2.54a.5.5 0 00.495.426h3.78a.5.5 0 00.495-.426l.36-2.54a7.994 7.994 0 001.62-.94l2.397.96a.5.5 0 00.607-.22l1.928-3.34a.5.5 0 00-.12-.638l-2.036-1.58zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z" />
     </svg>
   ),
 };
@@ -540,144 +539,355 @@ function TopicEditor({
 // ----------------------
 // Page components
 // ----------------------
-function BrandPage({ brand, setBrand, saveBrand, webhooks, ensureSessionId }) {
+// Settings Page (brand voice + preferences)
+function SettingsPage({
+  brand,
+  contentPreferences,
+  locks,
+  onSave,
+  onDirtyChange,
+  webhooks,
+  ensureSessionId,
+}) {
+  const [activeTab, setActiveTab] = useState("brand");
   const [showBrandDetails, setShowBrandDetails] = useState(true);
-  const handleSaveAndContinue = async () => {
-    const sessionId = ensureSessionId ? ensureSessionId() : undefined;
-    await postWebhook(
-      webhooks.brandProfile,
-      "brand_save_click",
-      { brand, sessionId }
-    );
-    await saveBrand();
+  const brandDisabled = Boolean(locks?.brand);
+
+  const [draftBrand, setDraftBrand] = useState(brand);
+  const [draftContentPreferences, setDraftContentPreferences] = useState(
+    contentPreferences
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+
+  useEffect(() => {
+    setDraftBrand(brand);
+  }, [brand]);
+
+  useEffect(() => {
+    setDraftContentPreferences(contentPreferences);
+  }, [contentPreferences]);
+
+  const tabs = [
+    { id: "content", label: "Your Content" },
+    { id: "brand", label: "Your Brand Voice" },
+    { id: "snapshot", label: "Snapshot" },
+    { id: "article", label: "Article" },
+    { id: "social", label: "Social" },
+    { id: "podcast", label: "Podcast" },
+  ];
+
+  const contentOptions = [
+    "Short Videos",
+    "Long-form Videos",
+    "Podcasts",
+    "Image Posts",
+    "Polls",
+    "Newsletters",
+    "Live Streams",
+    "Articles",
+  ];
+
+  const toggleContentPreference = (option) => {
+    setDraftContentPreferences((prev) => {
+      const exists = prev.includes(option);
+      if (exists) {
+        return prev.filter((item) => item !== option);
+      }
+      return [...prev, option];
+    });
   };
+
+  const brandChanged = useMemo(() => {
+    const keys = ["archetype", "tone", "audience", "values", "phrases", "style"];
+    return keys.some((key) => (draftBrand?.[key] || "") !== (brand?.[key] || ""));
+  }, [draftBrand, brand]);
+
+  const contentChanged = useMemo(() => {
+    if (draftContentPreferences.length !== contentPreferences.length) {
+      return true;
+    }
+    const a = [...draftContentPreferences].sort();
+    const b = [...contentPreferences].sort();
+    return a.some((value, idx) => value !== b[idx]);
+  }, [draftContentPreferences, contentPreferences]);
+
+  const isDirty = brandChanged || contentChanged;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  const handleSave = async () => {
+    if (!isDirty || !onSave || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (brandChanged && webhooks?.brandProfile) {
+        const sessionId = ensureSessionId ? ensureSessionId() : undefined;
+        await postWebhook(webhooks.brandProfile, "brand_save_click", {
+          brand: draftBrand,
+          sessionId,
+        });
+      }
+      await onSave({
+        brand: draftBrand,
+        contentPreferences: draftContentPreferences,
+      });
+      setLastSavedAt(new Date());
+    } catch (error) {
+      console.error(error);
+      setSaveError(
+        error instanceof Error ? error.message : "Unable to save settings"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <section className="min-h-screen px-[7vw] py-16">
-      <header className="mb-4">
-        <h2 className="text-2xl font-semibold">Your Brand Voice</h2>
+      <header className="mb-4 flex items-center justify-between">
+        <h2 className="text-2xl font-semibold">Settings</h2>
       </header>
-      <div className="bg-[#121629] border border-[#232941] rounded-2xl">
-        <button
-          type="button"
-          onClick={() => setShowBrandDetails((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-200"
-        >
-          <span>Brand voice details</span>
-          <span className="text-lg">{showBrandDetails ? "▾" : "▸"}</span>
-        </button>
-        {showBrandDetails && (
-          <div className="border-t border-[#232941] px-4 pb-4 pt-3">
-            <form
-              className="grid md:grid-cols-2 gap-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-              }}
+      <div className="overflow-hidden rounded-2xl border border-[#232941] bg-[#121629]">
+        <div className="flex flex-wrap gap-2 border-b border-[#232941] px-4 pt-4">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`rounded-full px-4 py-1 text-sm font-medium transition ${
+                activeTab === tab.id
+                  ? "bg-white text-[#0b1020]"
+                  : "bg-[#1a2037] text-slate-300 hover:bg-[#1f2745]"
+              }`}
             >
-              <label className="flex flex-col gap-2 text-sm">
-                Archetype
-                <select
-                  value={brand.archetype}
-                  onChange={(e) =>
-                    setBrand({ ...brand, archetype: e.target.value })
-                  }
-                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                >
-                  <option value="">Select…</option>
-                  {[
-                    "Magician",
-                    "Sage",
-                    "Hero",
-                    "Rebel",
-                    "Explorer",
-                    "Caregiver",
-                    "Creator",
-                    "Ruler",
-                    "Everyperson",
-                    "Innocent",
-                    "Jester",
-                    "Lover",
-                  ].map((a) => (
-                    <option key={a}>{a}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-2 text-sm">
-                Tone of Voice
-                <input
-                  value={brand.tone}
-                  onChange={(e) => setBrand({ ...brand, tone: e.target.value })}
-                  placeholder="clear, bold, human…"
-                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm">
-                Audience
-                <input
-                  value={brand.audience}
-                  onChange={(e) =>
-                    setBrand({ ...brand, audience: e.target.value })
-                  }
-                  placeholder="KBB retailers, UK SMB owners…"
-                  className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                />
-              </label>
-              <details className="md:col-span-2">
-                <summary className="cursor-pointer text-sm font-medium text-slate-200 py-2">
-                  Additional Voice Details
-                </summary>
-                <div className="mt-3 grid gap-4 md:grid-cols-2">
-                  <label className="flex flex-col gap-2 text-sm md:col-span-2">
-                    Values (comma-separated)
-                    <input
-                      value={brand.values}
-                      onChange={(e) =>
-                        setBrand({ ...brand, values: e.target.value })
-                      }
-                      placeholder="clarity, control, optimise"
-                      className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-2 text-sm md:col-span-2">
-                    Signature Phrases
-                    <input
-                      value={brand.phrases}
-                      onChange={(e) =>
-                        setBrand({ ...brand, phrases: e.target.value })
-                      }
-                      placeholder="Model Your Success™, chaos → clarity…"
-                      className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-2 text-sm md:col-span-2">
-                    Style Notes
-                    <textarea
-                      value={brand.style}
-                      onChange={(e) =>
-                        setBrand({ ...brand, style: e.target.value })
-                      }
-                      rows={4}
-                      placeholder="Short sentences, UK spelling…"
-                      className="bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                    />
-                  </label>
-                </div>
-              </details>
-            </form>
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-4 mt-4">
-              <div className="flex flex-col">
-                <button
-                  onClick={handleSaveAndContinue}
-                  className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
-                >
-                  Save & Continue
-                </button>
-                <p className="mt-1 text-xs italic text-slate-400">
-                  {webhooks.brandProfile}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="px-4 pb-6 pt-4">
+          {activeTab === "content" && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold">Your content mix</h3>
+                <p className="mt-1 text-sm text-slate-300">
+                  What type of content do you make? Pick all that apply.
                 </p>
               </div>
+              <div className="flex flex-wrap gap-2">
+                {contentOptions.map((option) => {
+                  const selected = draftContentPreferences.includes(option);
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => toggleContentPreference(option)}
+                      className={`rounded-full border px-4 py-1 text-sm transition ${
+                        selected
+                          ? "border-white bg-white text-[#0b1020]"
+                          : "border-[#2a3357] bg-[#0f1427] text-slate-200 hover:border-white/40"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+              {draftContentPreferences.length > 0 && (
+                <div className="rounded-xl border border-dashed border-[#2a3357] bg-[#0f1427] p-4 text-sm text-slate-300">
+                  <div className="font-semibold text-slate-100">
+                    Saved preferences
+                  </div>
+                  <p className="mt-2 leading-relaxed">
+                    You're focused on {draftContentPreferences.join(", ")}.
+                    We'll use this to personalize your recommendations once you
+                    save.
+                  </p>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+          {activeTab === "brand" && (
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => setShowBrandDetails((v) => !v)}
+                className="flex w-full items-center justify-between rounded-xl border border-[#232941] bg-[#181d35] px-4 py-3 text-left text-sm font-semibold text-slate-200"
+              >
+                <span>Brand voice details</span>
+                <span className="text-lg">{showBrandDetails ? "▾" : "▸"}</span>
+              </button>
+              {showBrandDetails && (
+                <div className="space-y-4 rounded-2xl border border-[#232941] bg-[#0f1427] p-4">
+                  <form
+                    className="grid gap-4 md:grid-cols-2"
+                    onSubmit={(e) => e.preventDefault()}
+                  >
+                    <label className="flex flex-col gap-2 text-sm">
+                      Archetype
+                      <select
+                        value={draftBrand.archetype}
+                        onChange={(e) =>
+                          setDraftBrand({
+                            ...draftBrand,
+                            archetype: e.target.value,
+                          })
+                        }
+                        disabled={brandDisabled}
+                        className="rounded-lg border border-[#232941] bg-[#0f1427] px-3 py-2 disabled:opacity-60"
+                      >
+                        <option value="">Select…</option>
+                        {[
+                          "Magician",
+                          "Sage",
+                          "Hero",
+                          "Rebel",
+                          "Explorer",
+                          "Caregiver",
+                          "Creator",
+                          "Ruler",
+                          "Everyperson",
+                          "Innocent",
+                          "Jester",
+                          "Lover",
+                        ].map((a) => (
+                          <option key={a} value={a}>
+                            {a}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm">
+                      Tone of Voice
+                      <input
+                        value={draftBrand.tone}
+                        onChange={(e) =>
+                          setDraftBrand({
+                            ...draftBrand,
+                            tone: e.target.value,
+                          })
+                        }
+                        disabled={brandDisabled}
+                        placeholder="clear, bold, human…"
+                        className="rounded-lg border border-[#232941] bg-[#0f1427] px-3 py-2 disabled:opacity-60"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm">
+                      Audience
+                      <input
+                        value={draftBrand.audience}
+                        onChange={(e) =>
+                          setDraftBrand({
+                            ...draftBrand,
+                            audience: e.target.value,
+                          })
+                        }
+                        disabled={brandDisabled}
+                        placeholder="KBB retailers, UK SMB owners…"
+                        className="rounded-lg border border-[#232941] bg-[#0f1427] px-3 py-2 disabled:opacity-60"
+                      />
+                    </label>
+                    <details className="md:col-span-2">
+                      <summary className="cursor-pointer py-2 text-sm font-medium text-slate-200">
+                        Additional Voice Details
+                      </summary>
+                      <div className="mt-3 grid gap-4 md:grid-cols-2">
+                        <label className="flex flex-col gap-2 text-sm md:col-span-2">
+                          Values (comma-separated)
+                          <input
+                            value={draftBrand.values}
+                            onChange={(e) =>
+                              setDraftBrand({
+                                ...draftBrand,
+                                values: e.target.value,
+                              })
+                            }
+                            disabled={brandDisabled}
+                            placeholder="clarity, control, optimise"
+                            className="rounded-lg border border-[#232941] bg-[#0f1427] px-3 py-2 disabled:opacity-60"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm md:col-span-2">
+                          Signature Phrases
+                          <input
+                            value={draftBrand.phrases}
+                            onChange={(e) =>
+                              setDraftBrand({
+                                ...draftBrand,
+                                phrases: e.target.value,
+                              })
+                            }
+                            disabled={brandDisabled}
+                            placeholder="Model Your Success™, chaos → clarity…"
+                            className="rounded-lg border border-[#232941] bg-[#0f1427] px-3 py-2 disabled:opacity-60"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm md:col-span-2">
+                          Style Notes
+                          <textarea
+                            value={draftBrand.style}
+                            onChange={(e) =>
+                              setDraftBrand({
+                                ...draftBrand,
+                                style: e.target.value,
+                              })
+                            }
+                            disabled={brandDisabled}
+                            rows={4}
+                            placeholder="Short sentences, UK spelling…"
+                            className="rounded-lg border border-[#232941] bg-[#0f1427] px-3 py-2 disabled:opacity-60"
+                          />
+                        </label>
+                      </div>
+                    </details>
+                  </form>
+                  {brandDisabled && (
+                    <p className="text-xs text-slate-400">
+                      To update your brand voice, start a new session from the New
+                      menu.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {activeTab !== "content" && activeTab !== "brand" && (
+            <div className="rounded-2xl border border-dashed border-[#232941] bg-[#0f1427] p-6 text-sm text-slate-300">
+              <p>
+                Configure your {tabs.find((tab) => tab.id === activeTab)?.label.toLowerCase()} preferences here. We're preparing
+                tailored controls for this section.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="mt-6 flex flex-col items-end gap-2">
+        {saveError ? (
+          <p className="text-xs text-red-400">{saveError}</p>
+        ) : isDirty ? (
+          <p className="text-xs text-amber-300">
+            You have unsaved changes. Save before leaving this page.
+          </p>
+        ) : lastSavedAt ? (
+          <p className="text-xs text-slate-400">
+            All changes saved{lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString()}` : ""}.
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!isDirty || saving}
+          className={`rounded-xl px-5 py-2 font-semibold transition ${
+            !isDirty || saving
+              ? "cursor-not-allowed bg-slate-500/40 text-slate-200"
+              : "bg-white text-[#0b1020]"
+          }`}
+        >
+          {saving ? "Saving…" : "Save settings"}
+        </button>
       </div>
     </section>
   );
@@ -1637,28 +1847,65 @@ function ContentOSApp() {
   }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
   // navigation (hash-style to keep canvas happy)
   const getViewFromHash = () => {
     if (typeof window === "undefined") return FLOW_ORDER[0];
     const hash = window.location?.hash
       ? window.location.hash.slice(1)
       : "";
+    if (hash === "settings") return "settings";
     return FLOW_ORDER.includes(hash) ? hash : FLOW_ORDER[0];
   };
 
   const [view, setView] = useState(getViewFromHash);
   useEffect(() => {
-    const onHash = () => setView(getViewFromHash());
+    const onHash = () => {
+      const nextView = getViewFromHash();
+      if (view === "settings" && nextView !== "settings" && hasUnsavedSettings) {
+        const allow = window.confirm(
+          "You have unsaved settings. Leave without saving?"
+        );
+        if (!allow) {
+          window.location.hash = "settings";
+          return;
+        }
+        setHasUnsavedSettings(false);
+      }
+      setView(nextView);
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, []);
+  }, [view, hasUnsavedSettings]);
   const navTo = (v) => {
-    if (locks.brand && v === "brand") return;
-    if (view === "brand" && v !== "brand")
-      setLocks((l) => ({ ...l, brand: true }));
+    if (v === view) return;
+    if (view === "settings" && v !== "settings" && hasUnsavedSettings) {
+      const allow = window.confirm(
+        "You have unsaved settings. Leave without saving?"
+      );
+      if (!allow) {
+        try {
+          window.location.hash = "settings";
+        } catch {}
+        return;
+      }
+      setHasUnsavedSettings(false);
+    }
     window.location.hash = v;
     setView(v);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleBeforeUnload = (event) => {
+      if (!hasUnsavedSettings) return;
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedSettings]);
 
   // state
   const [session, setSession] = useLocal("contentos.session", {
@@ -1708,6 +1955,10 @@ function ContentOSApp() {
     phrases: "",
     style: "",
   });
+  const [contentPreferences, setContentPreferences] = useLocal(
+    "contentos.contentTypes",
+    []
+  );
   const [topics, setTopics] = useLocal("contentos.topics", []);
   useEffect(() => {
     if (topics.length > 1) {
@@ -1810,10 +2061,10 @@ function ContentOSApp() {
   };
 
   // brand webhook + progress
-  const saveBrand = async () => {
-    if (!brand.archetype || !brand.tone) {
+  const saveBrand = async (brandInput = brand, { navigate = false } = {}) => {
+    if (!brandInput.archetype || !brandInput.tone) {
       alert("Please select an archetype and set your tone to continue.");
-      return;
+      throw new Error("Brand details incomplete");
     }
     // dump a small subset of localStorage for debugging
     const keys = [
@@ -1837,10 +2088,11 @@ function ContentOSApp() {
         }
       });
     } catch {}
+    storageDump["contentos.brand"] = brandInput;
     const payload = {
       type: "brand_profile",
       source: "contentos.app",
-      brand,
+      brand: brandInput,
       sessionId: ensureSessionId(),
       url: window.location?.href || "",
       hash: window.location?.hash || "",
@@ -1859,13 +2111,59 @@ function ContentOSApp() {
       );
       if (!ok) throw new Error("HTTP error");
       setLocks((l) => ({ ...l, brand: true }));
-      navTo("topics");
+      if (navigate) navTo("topics");
     } catch (err) {
       console.error("Brand webhook failed:", err);
-      if (window.confirm("Could not reach n8n. Continue to Topics anyway?")) {
+      const proceed = window.confirm(
+        "Could not reach n8n. Mark your brand voice as saved anyway?"
+      );
+      if (proceed) {
         setLocks((l) => ({ ...l, brand: true }));
-        navTo("topics");
+        if (navigate) navTo("topics");
+      } else {
+        throw err;
       }
+    }
+  };
+
+  const handleSaveSettings = async ({
+    brand: nextBrand,
+    contentPreferences: nextContentPreferences,
+  }) => {
+    const brandKeys = [
+      "archetype",
+      "tone",
+      "audience",
+      "values",
+      "phrases",
+      "style",
+    ];
+    const brandChanged = brandKeys.some(
+      (key) => (nextBrand?.[key] || "") !== (brand?.[key] || "")
+    );
+    const contentChanged = (() => {
+      if (nextContentPreferences.length !== contentPreferences.length) {
+        return true;
+      }
+      const a = [...nextContentPreferences].sort();
+      const b = [...contentPreferences].sort();
+      return a.some((value, idx) => value !== b[idx]);
+    })();
+
+    if (!brandChanged && !contentChanged) {
+      return;
+    }
+
+    if (brandChanged) {
+      await saveBrand(nextBrand);
+      setBrand(nextBrand);
+    }
+    if (contentChanged) {
+      setContentPreferences(nextContentPreferences);
+    }
+
+    if (brandChanged || contentChanged) {
+      setHasUnsavedSettings(false);
     }
   };
 
@@ -1975,6 +2273,13 @@ function ContentOSApp() {
 
   // reset
   const resetSession = () => {
+    if (view === "settings" && hasUnsavedSettings) {
+      const allow = window.confirm(
+        "You have unsaved settings. Leave without saving?"
+      );
+      if (!allow) return false;
+      setHasUnsavedSettings(false);
+    }
     if (
       !window.confirm(
         "Reset session? This clears brand, topics, snapshot, article, social, locks, refdata, and webhook settings."
@@ -2000,6 +2305,7 @@ function ContentOSApp() {
       style: "",
     });
     setTopics([]);
+    setContentPreferences([]);
     setTempTopic("");
     setTempContext("");
     setSnapshot({ text: "" });
@@ -2018,26 +2324,19 @@ function ContentOSApp() {
     });
     setN8N({ webhook: "" });
     setRefdata({ headers: [], rows: [] });
-    setView("brand");
+    setView("topics");
     try {
-      window.location.hash = "brand";
+      window.location.hash = "topics";
     } catch {}
+    setHasUnsavedSettings(false);
     setShowWelcome(true);
     return true;
   };
 
   const flow = FLOW_ORDER;
-  const steps = [
-    "Your Brand Voice",
-    "Topics",
-    "Snapshot",
-    "Article",
-    "Social",
-    "Podcast",
-  ];
+  const steps = ["Topic", "Snapshot", "Article", "Social", "Podcast"];
   const views = [
-    { id: "brand", label: "Your Brand Voice", icon: Icon.Sparkles },
-    { id: "topics", label: "Topics", icon: Icon.List },
+    { id: "topics", label: "Topic", icon: Icon.List },
     { id: "snapshot", label: "Delivery Snapshot", icon: Icon.Camera },
     { id: "article", label: "Article", icon: Icon.Doc },
     { id: "social", label: "Social Media Posts", icon: Icon.Chat },
@@ -2080,19 +2379,14 @@ function ContentOSApp() {
         </div>
         <nav className="flex flex-col gap-1">
           {views.map((v) => {
-            const disabled = locks.brand && v.id === "brand";
             const I = v.icon;
             return (
               <button
                 key={v.id}
-                disabled={disabled}
-                onClick={() => {
-                  if (disabled) return;
-                  navTo(v.id);
-                }}
+                onClick={() => navTo(v.id)}
                 className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg hover:bg-[#151a32] ${
                   view === v.id ? "bg-[#1a1f3c]" : ""
-                } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                }`}
               >
                 <I className="w-4 h-4 opacity-90" />
                 <span>{v.label}</span>
@@ -2118,16 +2412,27 @@ function ContentOSApp() {
             </button>
             <div className="text-sm opacity-70">
               {({
-                "brand":"Your Brand Voice",
-                "topics":"Topics",
-                "snapshot":"Delivery Snapshot",
-                "article":"Article",
-                "social":"Social Media Posts",
-                "podcast":"Podcast Script"
+                settings: "Settings",
+                topics: "Topic",
+                snapshot: "Delivery Snapshot",
+                article: "Article",
+                social: "Social Media Posts",
+                podcast: "Podcast Script",
               })[view] ?? "ContentOS"}
             </div>
           </div>
           <div className="flex items-center gap-2 text-slate-200/80">
+            <button
+              onClick={() => {
+                navTo("settings");
+                setSidebarOpen(false);
+              }}
+              className={`px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32] ${
+                view === "settings" ? "bg-[#151a32]" : ""
+              }`}
+            >
+              Settings
+            </button>
             <button
               onClick={resetSession}
               className="px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
@@ -2140,13 +2445,15 @@ function ContentOSApp() {
           </div>
         </div>
 
-        <Stepper current={currentIndex} steps={steps} />
+        {view !== "settings" && <Stepper current={currentIndex} steps={steps} />}
 
-        {view === "brand" && (
-          <BrandPage
+        {view === "settings" && (
+          <SettingsPage
             brand={brand}
-            setBrand={setBrand}
-            saveBrand={saveBrand}
+            contentPreferences={contentPreferences}
+            locks={locks}
+            onSave={handleSaveSettings}
+            onDirtyChange={setHasUnsavedSettings}
             webhooks={WEBHOOKS}
             ensureSessionId={ensureSessionId}
           />
@@ -2336,7 +2643,7 @@ CTA: Save this and start.`,
                     startNewSession();
                     setShowWelcome(false);
                     setSidebarOpen(false);
-                    navTo("brand");
+                    navTo("topics");
                   }}
                   className="order-1 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#0b1020] transition hover:bg-slate-100 sm:order-2"
                 >
