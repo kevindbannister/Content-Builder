@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.1";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.2";
 const VERSION_STORAGE_KEY = "contentos.version";
 const LOCAL_STORAGE_KEYS = [
   "contentos.session",
@@ -731,7 +731,7 @@ function SettingsPage({
         <h2 className="text-2xl font-semibold">Settings</h2>
       </header>
       <div className="overflow-hidden rounded-2xl border border-[#232941] bg-[#121629]">
-        <div className="flex flex-wrap gap-2 border-b border-[#232941] px-4 pt-4">
+        <div className="flex flex-wrap gap-2 border-b border-[#232941] px-4 pt-4 pb-4">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -1681,9 +1681,9 @@ function ShortFormVideosPage({
       }
     );
     if (!ok) {
-      setSaveError("Unable to reach webhook. Please try again.");
-      setSaving(false);
-      return;
+      setSaveError(
+        "Unable to reach webhook. Continuing without syncing to the webhook."
+      );
     }
     setSaving(false);
     navTo("polls");
@@ -1997,11 +1997,12 @@ function ImagePostsPage({ social, setSocial, makeImages, loadSocialSample, navTo
     const base = Array.isArray(social.images) ? [...social.images] : [];
     const filled = base.slice(0, 6);
     while (filled.length < 6) {
-      filled.push({ caption: "", alt: "" });
+      filled.push({ caption: "", alt: "", postCaption: "" });
     }
     return filled.map((image) => ({
       caption: image?.caption ?? "",
       alt: image?.alt ?? "",
+      postCaption: image?.postCaption ?? "",
     }));
   }, [social.images]);
 
@@ -2010,11 +2011,12 @@ function ImagePostsPage({ social, setSocial, makeImages, loadSocialSample, navTo
       const next = { ...prev };
       const images = Array.isArray(prev.images) ? [...prev.images] : makeImages();
       while (images.length < 6) {
-        images.push({ caption: "", alt: "" });
+        images.push({ caption: "", alt: "", postCaption: "" });
       }
       images[index] = {
         caption: nextImage.caption ?? "",
         alt: nextImage.alt ?? "",
+        postCaption: nextImage.postCaption ?? "",
       };
       next.images = images;
       return next;
@@ -2073,6 +2075,23 @@ function ImagePostsPage({ social, setSocial, makeImages, loadSocialSample, navTo
                 placeholder="Alt text / description"
                 className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 text-sm"
               />
+              <label className="flex flex-col gap-2 text-sm">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                  Social Media Caption
+                </span>
+                <textarea
+                  value={image.postCaption}
+                  onChange={(event) =>
+                    updateImage(index, {
+                      ...image,
+                      postCaption: event.target.value,
+                    })
+                  }
+                  rows={3}
+                  placeholder="Write the caption that will accompany this post"
+                  className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 text-sm leading-relaxed"
+                />
+              </label>
             </div>
           ))}
         </div>
@@ -2298,6 +2317,7 @@ function ContentOSApp() {
     Array.from({ length: 6 }, (_, i) => ({
       caption: `Image post #${i + 1}`,
       alt: "Describe the visual",
+      postCaption: "Share the story behind the visual",
     }));
   const makeNewsletters = () =>
     Array.from({ length: 3 }, (_, i) => ({
