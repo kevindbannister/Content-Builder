@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.5";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.6";
 const VERSION_STORAGE_KEY = "contentos.version";
 const LOCAL_STORAGE_KEYS = [
   "contentos.session",
@@ -10,6 +10,7 @@ const LOCAL_STORAGE_KEYS = [
   "contentos.brand",
   "contentos.topics",
   "contentos.snapshot",
+  "contentos.snapshot.chat",
   "contentos.article",
   "contentos.podcast",
   "contentos.social.design",
@@ -325,7 +326,7 @@ const WEBHOOKS = {
   snapshotGenerate: "http://localhost:5678/webhook-test/8792d1e2-8c5b-457f-96b0-63bca95e9ab4",
   articleGenerate: "http://localhost:5678/webhook-test/b30e07dc-0218-493a-a99f-3e0ad96429fc",
   snapshotChange:
-    "http://localhost:5678/webhook-test/639bda29-a5db-478c-912b-acd8753deb41",
+    "http://localhost:5678/webhook-test/259d665c-7975-47ba-b3e1-6d7055a40a9e",
 };
 
 const FLOW_ORDER = [
@@ -747,18 +748,33 @@ function SnapshotPage({
   topics,
   snapshot,
   setSnapshot,
-  n8n,
-  setN8N,
-  snapshotChange,
-  setSnapshotChange,
-  sending,
-  sendSnapshotChange,
+  snapshotChatMessages,
+  snapshotChatDraft,
+  setSnapshotChatDraft,
+  snapshotChatSending,
+  sendSnapshotChat,
   navTo,
   webhooks,
   brand,
   ensureSessionId,
 }) {
   const [generatingSnapshot, setGeneratingSnapshot] = useState(false);
+  const chatContainerRef = useRef(null);
+
+  useEffect(() => {
+    if (!chatContainerRef.current) return;
+    chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+  }, [snapshotChatMessages]);
+
+  const handleSnapshotChatKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (!snapshotChatSending) {
+        sendSnapshotChat();
+      }
+    }
+  };
+
   const requestSnapshot = async () => {
     if (!webhooks?.snapshotGenerate || generatingSnapshot) return;
     try {
@@ -864,46 +880,66 @@ function SnapshotPage({
       </div>
 
       <div className="mt-6 bg-[#121629] border border-[#232941] rounded-2xl p-4">
-        <h3 className="text-lg font-semibold mb-2">
+        <h3 className="text-lg font-semibold mb-1">
           Request changes to this snapshot
         </h3>
-        <label className="block text-sm">
-          Your change request
-          <textarea
-            value={snapshotChange}
-            onChange={(e) => setSnapshotChange(e.target.value)}
-            rows={6}
-            placeholder="Type any edits, additions, removals, or clarifications you want applied to the snapshot…"
-            className="w-full bg-[#0f1427] border border-[#232941] rounded-xl p-3 mt-2"
-          />
-        </label>
-        <div className="grid md:grid-cols-2 gap-3 mt-3">
-          <label className="block text-sm">
-            n8n Webhook URL
-            <input
-              value={n8n.webhook}
-              onChange={(e) => setN8N({ ...n8n, webhook: e.target.value })}
-              placeholder="https://your-n8n-host/webhook-test/xxxx"
-              className="mt-2 w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-            />
-          </label>
-          <div className="flex flex-col items-start justify-end">
-            <button
-              onClick={sendSnapshotChange}
-              disabled={sending}
-              className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60"
-            >
-              {sending ? "Sending…" : "Send to n8n"}
-            </button>
-            <p className="mt-1 text-xs italic text-slate-400">
-              {webhooks.snapshotChange}
-            </p>
-          </div>
-        </div>
-        <p className="text-xs text-slate-400 mt-2">
-          Payload includes your change text, current snapshot, topics, and brand
-          metadata.
+        <p className="text-xs text-slate-400">
+          Start a chat with the editing team. Each message is sent to the webhook
+          below and replies appear here automatically.
         </p>
+        <div
+          ref={chatContainerRef}
+          className="mt-3 h-64 overflow-y-auto bg-[#0a0f22] border border-[#2a3357] rounded-2xl p-3 flex flex-col gap-3"
+        >
+          {snapshotChatMessages.length ? (
+            snapshotChatMessages.map((message) => {
+              const role = message.role || "assistant";
+              const alignment = role === "user" ? "items-end" : "items-start";
+              let bubbleClasses = "bg-[#121629] border border-[#2a3357] text-slate-200";
+              if (role === "user") {
+                bubbleClasses = "bg-[#222845] text-slate-100";
+              } else if (role === "system") {
+                bubbleClasses = "bg-[#2f1f2f] border border-[#533553] text-rose-100";
+              }
+              return (
+                <div key={message.id || message.timestamp} className={`flex ${alignment}`}>
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${bubbleClasses}`}
+                  >
+                    {message.text}
+                  </div>
+                  <span className="sr-only">{message.timestamp}</span>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-xs text-slate-400 text-center py-10">
+              No messages yet. Send a request to get started.
+            </div>
+          )}
+        </div>
+        <div className="mt-3">
+          <textarea
+            value={snapshotChatDraft}
+            onChange={(e) => setSnapshotChatDraft(e.target.value)}
+            onKeyDown={handleSnapshotChatKeyDown}
+            rows={3}
+            placeholder="Type your change request… Press Enter to send, or Shift + Enter for a new line."
+            className="w-full bg-[#0f1427] border border-[#232941] rounded-xl p-3 text-sm"
+          />
+        </div>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-400 break-all sm:pr-3">
+            {webhooks.snapshotChange}
+          </p>
+          <button
+            onClick={sendSnapshotChat}
+            disabled={snapshotChatSending}
+            className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60"
+          >
+            {snapshotChatSending ? "Sending…" : "Send message"}
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -1302,6 +1338,10 @@ function ContentOSApp() {
   const [tempTopic, setTempTopic] = useState("");
   const [tempContext, setTempContext] = useState("");
   const [snapshot, setSnapshot] = useLocal("contentos.snapshot", { text: "" });
+  const [snapshotChatMessages, setSnapshotChatMessages] = useLocal(
+    "contentos.snapshot.chat",
+    []
+  );
   const [article, setArticle] = useLocal("contentos.article", {
     content: "",
     savedAt: null,
@@ -1311,6 +1351,8 @@ function ContentOSApp() {
     outline: "",
   });
   const [n8n, setN8N] = useLocal("contentos.n8n", { webhook: "" });
+  const [snapshotChatDraft, setSnapshotChatDraft] = useState("");
+  const [snapshotChatSending, setSnapshotChatSending] = useState(false);
 
   // social presets
   const makeShorts = () =>
@@ -1447,32 +1489,79 @@ function ContentOSApp() {
   };
 
   // snapshot/article change requests
-  const [snapshotChange, setSnapshotChange] = useState("");
-  const [sending, setSending] = useState(false);
-  const sendSnapshotChange = async () => {
-    if (!snapshotChange.trim())
-      return alert("Please type the changes you want to send.");
+  const sendSnapshotChat = async () => {
+    if (snapshotChatSending) return;
+    const trimmed = snapshotChatDraft.trim();
+    if (!trimmed) {
+      alert("Please type a message before sending.");
+      return;
+    }
+
+    const userMessage = {
+      id: uuid(),
+      role: "user",
+      text: trimmed,
+      timestamp: new Date().toISOString(),
+    };
+
+    let historyForWebhook = [];
+    setSnapshotChatMessages((prev) => {
+      historyForWebhook = [...prev, userMessage];
+      return historyForWebhook;
+    });
+    if (!historyForWebhook.length) {
+      historyForWebhook = [userMessage];
+    }
+    setSnapshotChatDraft("");
+    setSnapshotChatSending(true);
+
     try {
-      setSending(true);
-      const ok = await postWebhook(
-        WEBHOOKS.snapshotChange,
-        "snapshot_change_request",
-        {
-          changes: snapshotChange,
+      const response = await fetch(WEBHOOKS.snapshotChange, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "snapshot_change_chat",
+          timestamp: new Date().toISOString(),
+          message: trimmed,
+          history: historyForWebhook.map(({ role, text, timestamp }) => ({
+            role,
+            text,
+            timestamp,
+          })),
           snapshotText: snapshot.text,
           topics,
           brand,
           sessionId: ensureSessionId(),
-        }
-      );
-      if (!ok) throw new Error("HTTP error");
-      alert("Sent to n8n ✔︎");
-      setSnapshotChange("");
+        }),
+      });
+
+      if (!response.ok) throw new Error("HTTP error");
+
+      const replyText = (await response.text()).trim();
+      if (replyText) {
+        setSnapshotChatMessages((prev) => [
+          ...prev,
+          {
+            id: uuid(),
+            role: "assistant",
+            text: replyText,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      }
     } catch (e) {
       console.error(e);
-      alert("Could not send to n8n.");
+      setSnapshotChatMessages((prev) => [
+        ...prev,
+        {
+          id: uuid(),
+          role: "system",
+          text: "Sorry, we couldn't send your request. Please try again.",
+          timestamp: new Date().toISOString(),
+        },
+      ]);
     } finally {
-      setSending(false);
+      setSnapshotChatSending(false);
     }
   };
 
@@ -1533,6 +1622,9 @@ function ContentOSApp() {
     setTempTopic("");
     setTempContext("");
     setSnapshot({ text: "" });
+    setSnapshotChatMessages([]);
+    setSnapshotChatDraft("");
+    setSnapshotChatSending(false);
     setArticle({ content: "", savedAt: null });
     setPodcast({ title: "", outline: "" });
     setSocial({
@@ -1699,12 +1791,11 @@ function ContentOSApp() {
             topics={topics}
             snapshot={snapshot}
             setSnapshot={setSnapshot}
-            n8n={n8n}
-            setN8N={setN8N}
-            snapshotChange={snapshotChange}
-            setSnapshotChange={setSnapshotChange}
-            sending={sending}
-            sendSnapshotChange={sendSnapshotChange}
+            snapshotChatMessages={snapshotChatMessages}
+            snapshotChatDraft={snapshotChatDraft}
+            setSnapshotChatDraft={setSnapshotChatDraft}
+            snapshotChatSending={snapshotChatSending}
+            sendSnapshotChat={sendSnapshotChat}
             navTo={navTo}
             webhooks={WEBHOOKS}
             brand={brand}
