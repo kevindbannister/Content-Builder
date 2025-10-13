@@ -1164,6 +1164,7 @@ function SocialPage({
   const [saveError, setSaveError] = useState("");
 
   const questions = social.questions ?? [];
+  const shortsList = social.shorts ?? [];
   const questionSlots = useMemo(
     () => Array.from({ length: 10 }, (_, idx) => questions[idx] ?? null),
     [questions]
@@ -1176,6 +1177,18 @@ function SocialPage({
     () => questions.filter((q) => q.status === "rejected").length,
     [questions]
   );
+
+  const hasShortScripts = useMemo(
+    () => shortsList.some((short) => (short?.script ?? "").trim()),
+    [shortsList]
+  );
+  const [showShorts, setShowShorts] = useState(hasShortScripts);
+
+  useEffect(() => {
+    if (hasShortScripts) {
+      setShowShorts(true);
+    }
+  }, [hasShortScripts]);
 
   const updateQuestionStatus = (index, nextStatus) => {
     const target = questions[index];
@@ -1358,6 +1371,7 @@ function SocialPage({
     }));
 
     setScriptsLoading(false);
+    setShowShorts(true);
   };
 
   const handleContinueSave = async () => {
@@ -1392,13 +1406,16 @@ function SocialPage({
         <h2 className="text-2xl font-semibold">Social Media Posts</h2>
         <div className="flex gap-2">
           <button
-            onClick={loadSocialSample}
+            onClick={() => {
+              loadSocialSample();
+              setShowShorts(true);
+            }}
             className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
           >
             Load Sample
           </button>
           <button
-            onClick={() =>
+            onClick={() => {
               setSocial({
                 shorts: makeShorts(),
                 polls: makePolls(),
@@ -1407,8 +1424,9 @@ function SocialPage({
                 images: makeImages(),
                 newsletters: makeNewsletters(),
                 questions: [],
-              })
-            }
+              });
+              setShowShorts(false);
+            }}
             className="bg-[#222845] border border-[#2a3357] px-4 py-2 rounded-xl"
           >
             Clear
@@ -1512,44 +1530,46 @@ function SocialPage({
           </div>
         </div>
 
-        <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-semibold">10 Shorts Video Scripts</h3>
-            <span className="text-xs text-slate-400">
-              {social.shorts.length}/10
-            </span>
+        {showShorts && (
+          <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold">10 Shorts Video Scripts</h3>
+              <span className="text-xs text-slate-400">
+                {shortsList.length}/10
+              </span>
+            </div>
+            <ol className="space-y-3 list-decimal pl-6">
+              {shortsList.map((s, i) => (
+                <li
+                  key={i}
+                  className="bg-[#151a32] border border-[#232941] rounded-xl p-3"
+                >
+                  <input
+                    value={s.title}
+                    onChange={(e) => {
+                      const n = [...shortsList];
+                      n[i] = { ...n[i], title: e.target.value };
+                      setSocial({ ...social, shorts: n });
+                    }}
+                    placeholder={"Title for Short #" + (i + 1)}
+                    className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 mb-2"
+                  />
+                  <textarea
+                    value={s.script}
+                    onChange={(e) => {
+                      const n = [...shortsList];
+                      n[i] = { ...n[i], script: e.target.value };
+                      setSocial({ ...social, shorts: n });
+                    }}
+                    rows={4}
+                    placeholder="Hook → Body → CTA"
+                    className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                  />
+                </li>
+              ))}
+            </ol>
           </div>
-          <ol className="space-y-3 list-decimal pl-6">
-            {social.shorts.map((s, i) => (
-              <li
-                key={i}
-                className="bg-[#151a32] border border-[#232941] rounded-xl p-3"
-              >
-                <input
-                  value={s.title}
-                  onChange={(e) => {
-                    const n = [...social.shorts];
-                    n[i] = { ...n[i], title: e.target.value };
-                    setSocial({ ...social, shorts: n });
-                  }}
-                  placeholder={"Title for Short #" + (i + 1)}
-                  className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 mb-2"
-                />
-                <textarea
-                  value={s.script}
-                  onChange={(e) => {
-                    const n = [...social.shorts];
-                    n[i] = { ...n[i], script: e.target.value };
-                    setSocial({ ...social, shorts: n });
-                  }}
-                  rows={4}
-                  placeholder="Hook → Body → CTA"
-                  className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                />
-              </li>
-            ))}
-          </ol>
-        </div>
+        )}
       </div>
 
       <div className="mt-6 flex justify-end">
