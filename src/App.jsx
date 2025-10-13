@@ -357,7 +357,56 @@ const WEBHOOKS = {
     "http://localhost:5678/webhook-test/04461643-7c04-4fa6-a086-c58cbb9a2bcc",
 };
 
-const FLOW_ORDER = ["topics", "snapshot", "article", "social", "podcast"];
+const FLOW_ORDER = [
+  "topics",
+  "snapshot",
+  "article",
+  "social",
+  "polls",
+  "images",
+  "podcast",
+];
+
+const SAMPLE_POLLS = [
+  {
+    question: "Which format do you prefer?",
+    options: ["Shorts", "Carousel", "Newsletter", "Podcast"],
+  },
+  {
+    question: "Posting cadence?",
+    options: ["Daily", "3x weekly", "Weekly", "Monthly"],
+  },
+  {
+    question: "Biggest blocker?",
+    options: ["Time", "Ideas", "Confidence", "Process"],
+  },
+  {
+    question: "How long have you been creating?",
+    options: ["<6 months", "6-12 months", "1-3 years", "3+ years"],
+  },
+  {
+    question: "What support do you want next?",
+    options: ["Workflows", "Strategy", "Accountability", "Inspiration"],
+  },
+];
+
+const SAMPLE_IMAGES = [
+  { caption: "Behind the scenes", alt: "Editing suite with mood lighting" },
+  { caption: "Client win snapshot", alt: "Testimonial quote card" },
+  { caption: "Quick tip", alt: "Sticky note with marketing advice" },
+  { caption: "My stack", alt: "Flat lay of creator tools" },
+  { caption: "Workshop highlight", alt: "Presenter speaking to camera" },
+  { caption: "Mood board", alt: "Collage of brand visuals" },
+];
+
+const cloneSamplePolls = () =>
+  SAMPLE_POLLS.map((poll) => ({
+    question: poll.question,
+    options: [...poll.options],
+  }));
+
+const cloneSampleImages = () =>
+  SAMPLE_IMAGES.map((image) => ({ ...image }));
 
 // ----------------------
 // Icons
@@ -386,6 +435,21 @@ const Icon = {
   Chat: (p) => (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
       <path d="M4 4h12a3 3 0 013 3v6a3 3 0 01-3 3H9l-5 4v-4H4a3 3 0 01-3-3V7a3 3 0 013-3z" />
+    </svg>
+  ),
+  Video: (p) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
+      <path d="M4 5a2 2 0 00-2 2v10a2 2 0 002 2h9a2 2 0 002-2v-2l5 3V6l-5 3V7a2 2 0 00-2-2H4z" />
+    </svg>
+  ),
+  Poll: (p) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
+      <path d="M5 4h2v16H5zm6 6h2v10h-2zm6-4h2v14h-2z" />
+    </svg>
+  ),
+  Image: (p) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
+      <path d="M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v9l3.5-3.5 2.5 2.5 4-4L19 17V6H5zm4 2a2 2 0 110 4 2 2 0 010-4z" />
     </svg>
   ),
   Mic: (p) => (
@@ -1354,7 +1418,7 @@ function ArticlePage({
   );
 }
 
-function SocialPage({
+function ShortFormVideosPage({
   social,
   setSocial,
   makeShorts,
@@ -1607,13 +1671,13 @@ function SocialPage({
       return;
     }
     setSaving(false);
-    navTo("podcast");
+    navTo("polls");
   };
 
   return (
     <section className="min-h-screen px-[7vw] py-16">
       <header className="mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Social Media Posts</h2>
+        <h2 className="text-2xl font-semibold">Short Form Videos</h2>
         <div className="flex gap-2">
           <button
             onClick={() => {
@@ -1795,6 +1859,216 @@ function SocialPage({
             {saving ? "Saving…" : "Continue & Save"}
           </button>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function PollsPage({ social, setSocial, makePolls, loadSocialSample, navTo }) {
+  const pollsList = useMemo(() => {
+    const base = Array.isArray(social.polls) ? [...social.polls] : [];
+    const filled = base.slice(0, 5);
+    while (filled.length < 5) {
+      filled.push({ question: "", options: ["", "", "", ""] });
+    }
+    return filled.map((poll) => ({
+      question: poll?.question ?? "",
+      options: Array.from({ length: 4 }, (_, i) => poll?.options?.[i] ?? ""),
+    }));
+  }, [social.polls]);
+
+  const ensurePollState = (updater) => {
+    setSocial((prev) => {
+      const next = { ...prev };
+      const polls = Array.isArray(prev.polls) ? [...prev.polls] : makePolls();
+      while (polls.length < 5) {
+        polls.push({ question: "", options: ["", "", "", ""] });
+      }
+      updater(polls);
+      next.polls = polls.map((poll) => ({
+        question: poll?.question ?? "",
+        options: Array.from({ length: 4 }, (_, i) => poll?.options?.[i] ?? ""),
+      }));
+      return next;
+    });
+  };
+
+  const updatePollQuestion = (index, question) => {
+    ensurePollState((polls) => {
+      polls[index] = {
+        ...(polls[index] ?? { options: ["", "", "", ""] }),
+        question,
+      };
+    });
+  };
+
+  const updatePollOption = (pollIndex, optionIndex, value) => {
+    ensurePollState((polls) => {
+      const current = polls[pollIndex] ?? { question: "", options: ["", "", "", ""] };
+      const options = Array.from({ length: 4 }, (_, i) => current.options?.[i] ?? "");
+      options[optionIndex] = value;
+      polls[pollIndex] = { ...current, options };
+    });
+  };
+
+  return (
+    <section className="min-h-screen px-[7vw] py-16">
+      <header className="mb-4 flex items-center justify-between">
+        <h2 className="text-2xl font-semibold">Polls</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => ensurePollState((polls) => {
+              const reset = makePolls();
+              for (let i = 0; i < polls.length; i += 1) {
+                polls[i] = reset[i] ?? { question: "", options: ["", "", "", ""] };
+              }
+            })}
+            className="px-4 py-2 rounded-xl border border-[#2a3357] bg-[#151a32] text-sm font-semibold"
+          >
+            Reset Polls
+          </button>
+          <button
+            onClick={loadSocialSample}
+            className="px-4 py-2 rounded-xl border border-[#2a3357] bg-white text-[#0b1020] text-sm font-semibold"
+          >
+            Load Example
+          </button>
+        </div>
+      </header>
+      <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
+        <ol className="space-y-4 list-decimal pl-6">
+          {pollsList.map((poll, pollIndex) => (
+            <li
+              key={pollIndex}
+              className="bg-[#151a32] border border-[#232941] rounded-xl p-4"
+            >
+              <input
+                value={poll.question}
+                onChange={(event) => updatePollQuestion(pollIndex, event.target.value)}
+                placeholder={`Poll question #${pollIndex + 1}`}
+                className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 text-sm"
+              />
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {poll.options.map((option, optionIndex) => (
+                  <input
+                    key={optionIndex}
+                    value={option}
+                    onChange={(event) =>
+                      updatePollOption(pollIndex, optionIndex, event.target.value)
+                    }
+                    placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                    className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 text-sm"
+                  />
+                ))}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div className="mt-6 flex justify-end">
+        <button
+          onClick={() => navTo("images")}
+          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+        >
+          Continue →
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ImagePostsPage({ social, setSocial, makeImages, loadSocialSample, navTo }) {
+  const imagesList = useMemo(() => {
+    const base = Array.isArray(social.images) ? [...social.images] : [];
+    const filled = base.slice(0, 6);
+    while (filled.length < 6) {
+      filled.push({ caption: "", alt: "" });
+    }
+    return filled.map((image) => ({
+      caption: image?.caption ?? "",
+      alt: image?.alt ?? "",
+    }));
+  }, [social.images]);
+
+  const updateImage = (index, nextImage) => {
+    setSocial((prev) => {
+      const next = { ...prev };
+      const images = Array.isArray(prev.images) ? [...prev.images] : makeImages();
+      while (images.length < 6) {
+        images.push({ caption: "", alt: "" });
+      }
+      images[index] = {
+        caption: nextImage.caption ?? "",
+        alt: nextImage.alt ?? "",
+      };
+      next.images = images;
+      return next;
+    });
+  };
+
+  const handleGenerate = () => {
+    setSocial((prev) => ({
+      ...prev,
+      images: makeImages(),
+    }));
+  };
+
+  return (
+    <section className="min-h-screen px-[7vw] py-16">
+      <header className="mb-4 flex items-center justify-between">
+        <h2 className="text-2xl font-semibold">Image Posts</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={handleGenerate}
+            className="px-4 py-2 rounded-xl border border-[#2a3357] bg-white text-[#0b1020] text-sm font-semibold"
+          >
+            Generate Posts
+          </button>
+          <button
+            onClick={loadSocialSample}
+            className="px-4 py-2 rounded-xl border border-[#2a3357] bg-[#151a32] text-sm font-semibold"
+          >
+            Load Example
+          </button>
+        </div>
+      </header>
+      <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {imagesList.map((image, index) => (
+            <div
+              key={index}
+              className="border border-[#232941] rounded-2xl bg-[#151a32] p-4 flex flex-col gap-3"
+            >
+              <div className="aspect-square rounded-xl border border-dashed border-[#2a3357] bg-[#0f1427] grid place-items-center text-xs uppercase tracking-widest text-slate-500">
+                Image Placeholder
+              </div>
+              <input
+                value={image.caption}
+                onChange={(event) =>
+                  updateImage(index, { ...image, caption: event.target.value })
+                }
+                placeholder={`Caption ${index + 1}`}
+                className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                value={image.alt}
+                onChange={(event) =>
+                  updateImage(index, { ...image, alt: event.target.value })
+                }
+                placeholder="Alt text / description"
+                className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-6 flex justify-end">
+        <button
+          onClick={() => navTo("podcast")}
+          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+        >
+          Continue →
+        </button>
       </div>
     </section>
   );
@@ -1992,7 +2266,10 @@ function ContentOSApp() {
       script: "",
     }));
   const makePolls = () =>
-    Array.from({ length: 3 }, () => ({ question: "", options: ["", ""] }));
+    Array.from({ length: 5 }, (_, i) => ({
+      question: `Poll question #${i + 1}`,
+      options: ["Option A", "Option B", "Option C", "Option D"],
+    }));
   const makeCarousels = () => [
     {
       title: "Carousel",
@@ -2004,9 +2281,9 @@ function ContentOSApp() {
     },
   ];
   const makeImages = () =>
-    Array.from({ length: 5 }, (_, i) => ({
+    Array.from({ length: 6 }, (_, i) => ({
       caption: `Image post #${i + 1}`,
-      alt: "",
+      alt: "Describe the visual",
     }));
   const makeNewsletters = () =>
     Array.from({ length: 3 }, (_, i) => ({
@@ -2334,12 +2611,22 @@ function ContentOSApp() {
   };
 
   const flow = FLOW_ORDER;
-  const steps = ["Topic", "Snapshot", "Article", "Social", "Podcast"];
+  const steps = [
+    "Topic",
+    "Snapshot",
+    "Article",
+    "Short Form Videos",
+    "Polls",
+    "Image Posts",
+    "Podcast",
+  ];
   const views = [
     { id: "topics", label: "Topic", icon: Icon.List },
     { id: "snapshot", label: "Delivery Snapshot", icon: Icon.Camera },
     { id: "article", label: "Article", icon: Icon.Doc },
-    { id: "social", label: "Social Media Posts", icon: Icon.Chat },
+    { id: "social", label: "Short Form Videos", icon: Icon.Video },
+    { id: "polls", label: "Polls", icon: Icon.Poll },
+    { id: "images", label: "Image Posts", icon: Icon.Image },
     { id: "podcast", label: "Podcast Script", icon: Icon.Mic },
   ];
   const currentIndex = useMemo(() => Math.max(0, flow.indexOf(view)), [view]);
@@ -2416,7 +2703,9 @@ function ContentOSApp() {
                 topics: "Topic",
                 snapshot: "Delivery Snapshot",
                 article: "Article",
-                social: "Social Media Posts",
+                social: "Short Form Videos",
+                polls: "Polls",
+                images: "Image Posts",
                 podcast: "Podcast Script",
               })[view] ?? "ContentOS"}
             </div>
@@ -2508,7 +2797,7 @@ function ContentOSApp() {
           />
         )}
         {view === "social" && (
-          <SocialPage
+          <ShortFormVideosPage
             social={social}
             setSocial={setSocial}
             makeShorts={makeShorts}
@@ -2552,20 +2841,7 @@ CTA: Save this and start.`,
                     status: "pending",
                   },
                 ],
-                polls: [
-                  {
-                    question: "Which format do you prefer?",
-                    options: ["Shorts", "Carousel", "Newsletter", "Podcast"],
-                  },
-                  {
-                    question: "Posting cadence?",
-                    options: ["Daily", "3x weekly", "Weekly", "Monthly"],
-                  },
-                  {
-                    question: "Biggest blocker?",
-                    options: ["Time", "Ideas", "Confidence", "Process"],
-                  },
-                ],
+                polls: cloneSamplePolls(),
                 quote: { text: "Action creates clarity.", author: "ContentOS" },
                 carousels: [
                   {
@@ -2588,13 +2864,7 @@ CTA: Save this and start.`,
                     ],
                   },
                 ],
-                images: [
-                  { caption: "Behind the scenes" },
-                  { caption: "Client win snapshot" },
-                  { caption: "Quick tip" },
-                  { caption: "My stack" },
-                  { caption: "Workshop highlight" },
-                ],
+                images: cloneSampleImages(),
                 newsletters: [
                   {
                     subject: "Week 1 — Ship Your First",
@@ -2612,6 +2882,34 @@ CTA: Save this and start.`,
               })
             }
             session={session}
+          />
+        )}
+        {view === "polls" && (
+          <PollsPage
+            social={social}
+            setSocial={setSocial}
+            makePolls={makePolls}
+            loadSocialSample={() =>
+              setSocial((prev) => ({
+                ...prev,
+                polls: cloneSamplePolls(),
+              }))
+            }
+            navTo={navTo}
+          />
+        )}
+        {view === "images" && (
+          <ImagePostsPage
+            social={social}
+            setSocial={setSocial}
+            makeImages={makeImages}
+            loadSocialSample={() =>
+              setSocial((prev) => ({
+                ...prev,
+                images: cloneSampleImages(),
+              }))
+            }
+            navTo={navTo}
           />
         )}
         {view === "podcast" && (
