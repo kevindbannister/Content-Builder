@@ -319,6 +319,27 @@ async function postWebhook(url, type, data) {
   }
 }
 
+async function postWebhookJson(url, type, data) {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type,
+        timestamp: new Date().toISOString(),
+        ...data,
+      }),
+    });
+    const json = await res
+      .json()
+      .catch(() => null);
+    return { ok: res.ok, data: json };
+  } catch (error) {
+    console.error(`Webhook ${type} failed:`, error);
+    return { ok: false, data: null };
+  }
+}
+
 const WEBHOOKS = {
   startSession: "http://localhost:5678/webhook-test/3c135f0d-ffad-4324-b30e-eaed69086ae7",
   brandProfile: "http://localhost:5678/webhook-test/8787372f-aa37-4295-af51-f18c0b7d6a65",
@@ -327,6 +348,12 @@ const WEBHOOKS = {
   articleGenerate: "http://localhost:5678/webhook-test/b30e07dc-0218-493a-a99f-3e0ad96429fc",
   snapshotChange:
     "http://localhost:5678/webhook-test/259d665c-7975-47ba-b3e1-6d7055a40a9e",
+  socialTopQuestions:
+    "http://localhost:5678/webhook-test/af7a1a02-4113-4703-972a-d34930f2ed05",
+  socialShortScripts:
+    "http://localhost:5678/webhook-test/50d7627b-9d24-4186-a974-9a09f7f84796",
+  socialContinueSave:
+    "http://localhost:5678/webhook-test/04461643-7c04-4fa6-a086-c58cbb9a2bcc",
 };
 
 const FLOW_ORDER = [
@@ -1127,20 +1154,268 @@ function SocialPage({
   makeNewsletters,
   navTo,
   loadSocialSample,
+  session,
 }) {
+  const [questionLoading, setQuestionLoading] = useState(false);
+  const [questionError, setQuestionError] = useState("");
+  const [scriptsLoading, setScriptsLoading] = useState(false);
+  const [scriptsError, setScriptsError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const questions = social.questions ?? [];
+  const shortsList = social.shorts ?? [];
+  const questionSlots = useMemo(
+    () => Array.from({ length: 10 }, (_, idx) => questions[idx] ?? null),
+    [questions]
+  );
+  const approvedQuestions = useMemo(
+    () => questions.filter((q) => q.status === "approved"),
+    [questions]
+  );
+  const rejectedCount = useMemo(
+    () => questions.filter((q) => q.status === "rejected").length,
+    [questions]
+  );
+
+  const hasShortScripts = useMemo(
+    () => shortsList.some((short) => (short?.script ?? "").trim()),
+    [shortsList]
+  );
+  const [showShorts, setShowShorts] = useState(hasShortScripts);
+
+  useEffect(() => {
+    if (hasShortScripts) {
+      setShowShorts(true);
+    }
+  }, [hasShortScripts]);
+
+  const updateQuestionStatus = (index, nextStatus) => {
+    const target = questions[index];
+    if (!target) return;
+    const toggledStatus =
+      target.status === nextStatus ? "pending" : nextStatus;
+    setSocial((prev) => {
+      const existing = [...(prev.questions ?? [])];
+      if (!existing[index]) return prev;
+      existing[index] = { ...existing[index], status: toggledStatus };
+      return { ...prev, questions: existing };
+    });
+  };
+
+  const handleGenerateQuestions = async () => {
+    setQuestionError("");
+    setScriptsError("");
+    setQuestionLoading(true);
+
+    let ok = false;
+    let incoming = [];
+    try {
+      const response = await postWebhookJson(
+        WEBHOOKS.socialTopQuestions,
+        "social_generate_top_questions",
+        {
+          sessionId: session?.id ?? null,
+          approvedQuestions: approvedQuestions.map((q) => ({
+            id: q.id,
+            question: q.text,
+          })),
+          rejectedQuestions: questions
+            .filter((q) => q.status === "rejected")
+            .map((q) => ({ id: q.id, question: q.text })),
+        }
+      );
+      ok = response.ok;
+      if (Array.isArray(response.data?.questions)) {
+        incoming = response.data.questions;
+      }
+    } catch (error) {
+      console.error("Generate top questions failed", error);
+    }
+
+    if (!incoming.length) {
+      incoming = Array.from({ length: 10 }, (_, i) => `Top Question ${i + 1}`);
+      setQuestionError(
+        "No questions returned from webhook. Loaded placeholder prompts instead."
+      );
+    } else if (!ok) {
+      setQuestionError(
+        "Webhook responded with a non-200 status. Questions refreshed with returned data."
+      );
+    }
+
+    const normalized = incoming
+      .map((item, idx) => {
+        if (typeof item === "string") {
+          return { id: uuid(), text: item, status: "pending" };
+        }
+        if (item && typeof item === "object") {
+          const text =
+            typeof item.question === "string"
+              ? item.question
+              : typeof item.text === "string"
+              ? item.text
+              : "";
+          if (!text) return null;
+          return {
+            id: item.id || uuid(),
+            text,
+            status: "pending",
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    setSocial((prev) => {
+      const existing = (prev.questions ?? []).filter(
+        (q) => q.status !== "rejected"
+      );
+      const next = [...existing];
+      for (const item of normalized) {
+        if (next.length >= 10) break;
+        next.push(item);
+      }
+      return { ...prev, questions: next.slice(0, 10) };
+    });
+
+    setQuestionLoading(false);
+  };
+
+  const handleGenerateShorts = async () => {
+    if (!approvedQuestions.length) {
+      setScriptsError("Approve at least one question to generate scripts.");
+      return;
+    }
+    setScriptsError("");
+    setScriptsLoading(true);
+
+    let ok = false;
+    let shortsPayload = [];
+    try {
+      const response = await postWebhookJson(
+        WEBHOOKS.socialShortScripts,
+        "social_generate_short_scripts",
+        {
+          sessionId: session?.id ?? null,
+          questions: approvedQuestions.map((q, index) => ({
+            id: q.id,
+            question: q.text,
+            order: index + 1,
+          })),
+        }
+      );
+      ok = response.ok;
+      if (Array.isArray(response.data?.shorts)) {
+        shortsPayload = response.data.shorts;
+      }
+    } catch (error) {
+      console.error("Generate short scripts failed", error);
+    }
+
+    if (!shortsPayload.length) {
+      shortsPayload = approvedQuestions.map((q, idx) => ({
+        title: q.text || `Short ${idx + 1}`,
+        script: `Hook: ${q.text}\nBody: Expand on this idea with your unique angle.\nCTA: Invite your audience to take the next step.`,
+      }));
+      setScriptsError(
+        "No scripts returned from webhook. Generated placeholder scripts from your approved questions."
+      );
+    } else if (!ok) {
+      setScriptsError(
+        "Webhook responded with a non-200 status. Showing returned scripts where possible."
+      );
+    }
+
+    const normalized = shortsPayload
+      .map((item, idx) => {
+        if (typeof item === "string") {
+          return {
+            title: `Short ${idx + 1}`,
+            script: item,
+          };
+        }
+        if (item && typeof item === "object") {
+          const title =
+            typeof item.title === "string" && item.title.trim()
+              ? item.title
+              : typeof item.question === "string"
+              ? item.question
+              : `Short ${idx + 1}`;
+          const script =
+            typeof item.script === "string"
+              ? item.script
+              : typeof item.body === "string"
+              ? item.body
+              : "";
+          return {
+            title,
+            script,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    const filled = normalized.slice(0, 10);
+    while (filled.length < 10) {
+      filled.push({
+        title: `Short ${filled.length + 1}`,
+        script: "",
+      });
+    }
+
+    setSocial((prev) => ({
+      ...prev,
+      shorts: filled,
+    }));
+
+    setScriptsLoading(false);
+    setShowShorts(true);
+  };
+
+  const handleContinueSave = async () => {
+    setSaveError("");
+    setSaving(true);
+    const ok = await postWebhook(
+      WEBHOOKS.socialContinueSave,
+      "social_continue_save",
+      {
+        sessionId: session?.id ?? null,
+        questions: (social.questions ?? []).map((q, index) => ({
+          id: q.id,
+          question: q.text,
+          status: q.status,
+          order: index + 1,
+        })),
+        shorts: social.shorts,
+      }
+    );
+    if (!ok) {
+      setSaveError("Unable to reach webhook. Please try again.");
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+    navTo("podcast");
+  };
+
   return (
     <section className="min-h-screen px-[7vw] py-16">
       <header className="mb-4 flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Social Media Posts</h2>
         <div className="flex gap-2">
           <button
-            onClick={loadSocialSample}
+            onClick={() => {
+              loadSocialSample();
+              setShowShorts(true);
+            }}
             className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
           >
             Load Sample
           </button>
           <button
-            onClick={() =>
+            onClick={() => {
               setSocial({
                 shorts: makeShorts(),
                 polls: makePolls(),
@@ -1148,8 +1423,10 @@ function SocialPage({
                 carousels: makeCarousels(),
                 images: makeImages(),
                 newsletters: makeNewsletters(),
-              })
-            }
+                questions: [],
+              });
+              setShowShorts(false);
+            }}
             className="bg-[#222845] border border-[#2a3357] px-4 py-2 rounded-xl"
           >
             Clear
@@ -1159,52 +1436,155 @@ function SocialPage({
 
       <div className="space-y-6">
         <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-semibold">10 Shorts Video Scripts</h3>
-            <span className="text-xs text-slate-400">
-              {social.shorts.length}/10
-            </span>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Top Questions</h3>
+              <p className="text-xs text-slate-400">
+                Approve the ideas you love, reject the rest, and refresh to fill up to 10.
+              </p>
+            </div>
+            <div className="text-xs text-right text-slate-400">
+              <p>{questions.length}/10 showing</p>
+              <p>{approvedQuestions.length} approved · {rejectedCount} rejected</p>
+            </div>
           </div>
-          <ol className="space-y-3 list-decimal pl-6">
-            {social.shorts.map((s, i) => (
-              <li
-                key={i}
-                className="bg-[#151a32] border border-[#232941] rounded-xl p-3"
-              >
-                <input
-                  value={s.title}
-                  onChange={(e) => {
-                    const n = [...social.shorts];
-                    n[i] = { ...n[i], title: e.target.value };
-                    setSocial({ ...social, shorts: n });
-                  }}
-                  placeholder={"Title for Short #" + (i + 1)}
-                  className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 mb-2"
-                />
-                <textarea
-                  value={s.script}
-                  onChange={(e) => {
-                    const n = [...social.shorts];
-                    n[i] = { ...n[i], script: e.target.value };
-                    setSocial({ ...social, shorts: n });
-                  }}
-                  rows={4}
-                  placeholder="Hook → Body → CTA"
-                  className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
-                />
-              </li>
-            ))}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={handleGenerateQuestions}
+              disabled={questionLoading}
+              className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {questionLoading ? "Generating…" : "Generate Top Questions"}
+            </button>
+            {questionError && (
+              <span className="text-xs text-rose-400 self-center">
+                {questionError}
+              </span>
+            )}
+          </div>
+          <ol className="mt-4 space-y-3 list-decimal pl-6">
+            {questionSlots.map((q, idx) => {
+              const status = q?.status ?? "pending";
+              const baseClasses =
+                "border rounded-xl p-3 bg-[#151a32] transition-colors";
+              const statusClasses = q
+                ? status === "approved"
+                  ? "border-emerald-500/60"
+                  : status === "rejected"
+                  ? "border-rose-500/60 opacity-70"
+                  : "border-[#232941]"
+                : "border-dashed border-[#232941]/60 text-slate-500 italic";
+              return (
+                <li key={q?.id ?? idx} className={`${baseClasses} ${statusClasses}`}>
+                  {q ? (
+                    <>
+                      <p className="font-medium text-sm leading-relaxed">
+                        {q.text}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-4 text-xs">
+                        <label className="inline-flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-emerald-500"
+                            checked={status === "approved"}
+                            onChange={() => updateQuestionStatus(idx, "approved")}
+                          />
+                          Approve
+                        </label>
+                        <label className="inline-flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-rose-500"
+                            checked={status === "rejected"}
+                            onChange={() => updateQuestionStatus(idx, "rejected")}
+                          />
+                          Reject
+                        </label>
+                        <span className="text-slate-400">
+                          {status === "pending" ? "Pending" : status === "approved" ? "Approved" : "Rejected"}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <p>Empty slot – generate more questions.</p>
+                  )}
+                </li>
+              );
+            })}
           </ol>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={handleGenerateShorts}
+              disabled={scriptsLoading || !approvedQuestions.length}
+              className="bg-[#2b3357] border border-[#39406b] px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {scriptsLoading
+                ? "Generating scripts…"
+                : "Generate My Short Video Scripts"}
+            </button>
+            {scriptsError && (
+              <span className="text-xs text-amber-300 self-center">
+                {scriptsError}
+              </span>
+            )}
+          </div>
         </div>
+
+        {showShorts && (
+          <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold">10 Shorts Video Scripts</h3>
+              <span className="text-xs text-slate-400">
+                {shortsList.length}/10
+              </span>
+            </div>
+            <ol className="space-y-3 list-decimal pl-6">
+              {shortsList.map((s, i) => (
+                <li
+                  key={i}
+                  className="bg-[#151a32] border border-[#232941] rounded-xl p-3"
+                >
+                  <input
+                    value={s.title}
+                    onChange={(e) => {
+                      const n = [...shortsList];
+                      n[i] = { ...n[i], title: e.target.value };
+                      setSocial({ ...social, shorts: n });
+                    }}
+                    placeholder={"Title for Short #" + (i + 1)}
+                    className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2 mb-2"
+                  />
+                  <textarea
+                    value={s.script}
+                    onChange={(e) => {
+                      const n = [...shortsList];
+                      n[i] = { ...n[i], script: e.target.value };
+                      setSocial({ ...social, shorts: n });
+                    }}
+                    rows={4}
+                    placeholder="Hook → Body → CTA"
+                    className="w-full bg-[#0f1427] border border-[#232941] rounded-lg px-3 py-2"
+                  />
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 flex justify-end">
-        <button
-          onClick={() => navTo("podcast")}
-          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
-        >
-          Continue → Podcast
-        </button>
+        <div className="flex flex-col items-end gap-2">
+          {saveError && (
+            <span className="text-xs text-rose-400">{saveError}</span>
+          )}
+          <button
+            onClick={handleContinueSave}
+            disabled={saving}
+            className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {saving ? "Saving…" : "Continue & Save"}
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -1389,6 +1769,7 @@ function ContentOSApp() {
     carousels: makeCarousels(),
     images: makeImages(),
     newsletters: makeNewsletters(),
+    questions: [],
   });
 
   // topic helpers
@@ -1837,6 +2218,33 @@ function ContentOSApp() {
 Point: ${i + 1} small reps beat 1 big launch.
 CTA: Save this and start.`,
                 })),
+                questions: [
+                  {
+                    id: uuid(),
+                    text: "What is the biggest mindset shift you made to post consistently?",
+                    status: "pending",
+                  },
+                  {
+                    id: uuid(),
+                    text: "How do you batch content ideas without burning out?",
+                    status: "pending",
+                  },
+                  {
+                    id: uuid(),
+                    text: "What would you tell someone who hasn't posted in 30 days?",
+                    status: "pending",
+                  },
+                  {
+                    id: uuid(),
+                    text: "Which platform brings you the most engaged leads right now?",
+                    status: "pending",
+                  },
+                  {
+                    id: uuid(),
+                    text: "What's your go-to CTA when you want direct responses?",
+                    status: "pending",
+                  },
+                ],
                 polls: [
                   {
                     question: "Which format do you prefer?",
@@ -1896,6 +2304,7 @@ CTA: Save this and start.`,
                 ],
               })
             }
+            session={session}
           />
         )}
         {view === "podcast" && (
