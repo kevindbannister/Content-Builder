@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.8";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.1";
 const VERSION_STORAGE_KEY = "contentos.version";
 const LOCAL_STORAGE_KEYS = [
   "contentos.session",
@@ -2131,8 +2131,7 @@ function PodcastPage({ podcast, setPodcast }) {
 function ContentOSApp() {
   const displayVersion = useMemo(() => {
     if (!APP_VERSION || APP_VERSION === "dev") return "dev";
-    const [major, minor] = APP_VERSION.split(".");
-    return [major, minor].filter(Boolean).join(".") || APP_VERSION;
+    return APP_VERSION;
   }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
