@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.10";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.11";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -1957,7 +1957,7 @@ function SnapshotPage({
         <div className="flex-1 space-y-6">
           {!!topics.length && (
             <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
-              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
                     Selected topics
@@ -1966,13 +1966,28 @@ function SnapshotPage({
                     These inform tone, proof points, and context.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => navTo("topics")}
-                  className="print-hidden rounded-lg border border-[#2a3357] px-3 py-1 text-xs font-semibold text-slate-100 transition hover:bg-[#151a32]"
-                >
-                  Change Topic
-                </button>
+                <div className="print-hidden flex flex-col items-start gap-2 sm:items-end">
+                  <button
+                    type="button"
+                    onClick={() => navTo("topics")}
+                    className="rounded-lg border border-[#2a3357] px-3 py-1 text-xs font-semibold text-slate-100 transition hover:bg-[#151a32]"
+                  >
+                    Change Topic
+                  </button>
+                  <button
+                    type="button"
+                    onClick={requestSnapshot}
+                    disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
+                    className="rounded-xl border border-[#2a3357] bg-[#222845] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {generatingSnapshot
+                      ? "Requesting…"
+                      : "Generate My Delivery Snapshot"}
+                  </button>
+                  <p className="break-all text-xs italic text-slate-400">
+                    {webhooks?.snapshotGenerate}
+                  </p>
+                </div>
               </div>
               <ul className="grid gap-3 md:grid-cols-2">
                 {topics.map((topic) => (
@@ -1989,33 +2004,6 @@ function SnapshotPage({
               </ul>
             </div>
           )}
-          <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-100">
-                  Delivery Snapshot Draft
-                </h3>
-                <p className="text-sm text-slate-300">
-                  Fill the sections below. We’ll stitch them together for export, print, and change requests.
-                </p>
-              </div>
-              <div className="print-hidden flex flex-col items-start gap-2 sm:items-end">
-                <button
-                  type="button"
-                  onClick={requestSnapshot}
-                  disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
-                  className="rounded-xl border border-[#2a3357] bg-[#222845] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {generatingSnapshot
-                    ? "Requesting…"
-                    : "Generate My Delivery Snapshot"}
-                </button>
-                <p className="break-all text-xs italic text-slate-400">
-                  {webhooks?.snapshotGenerate}
-                </p>
-              </div>
-            </div>
-          </div>
           <div className="space-y-4">
             {sectionsWithMeta.map((section) => {
               const definition = section.definition;
