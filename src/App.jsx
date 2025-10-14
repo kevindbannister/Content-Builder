@@ -1688,6 +1688,13 @@ function SnapshotPage({
     [setSnapshot]
   );
 
+  const handleSectionChatDraftChange = useCallback(
+    (sectionId, value) => {
+      setSectionChatDrafts((prev) => ({ ...prev, [sectionId]: value }));
+    },
+    [setSectionChatDrafts]
+  );
+
   const handleSnapshotChatKeyDown = (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -2006,6 +2013,9 @@ function SnapshotPage({
             {sectionsWithMeta.map((section) => {
               const definition = section.definition;
               const limit = section.limit;
+              const sectionChatDraft = sectionChatDrafts[section.id] || "";
+              const sectionChatDisabled =
+                snapshotChatSending || !sectionChatDraft.trim();
               let badgeTone =
                 "border-[#2a3357] bg-[#0f1427] text-slate-200";
               if (section.overLimit) {
@@ -2079,6 +2089,37 @@ function SnapshotPage({
                             Approaching the limit.
                           </span>
                         ) : null}
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
+                        <textarea
+                          value={sectionChatDraft}
+                          onChange={(event) =>
+                            handleSectionChatDraftChange(
+                              section.id,
+                              event.target.value
+                            )
+                          }
+                          onKeyDown={(event) =>
+                            handleSectionChatKeyDown(
+                              event,
+                              section.id,
+                              definition.title
+                            )
+                          }
+                          rows={1}
+                          placeholder={`Request a tweak for ${definition.title}…`}
+                          className="h-10 w-full resize-none rounded-xl border border-[#2a3357] bg-[#0f1427] px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#566fee]/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            sendSectionChat(section.id, definition.title)
+                          }
+                          disabled={sectionChatDisabled}
+                          className="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-[#0b1020] transition disabled:opacity-60"
+                        >
+                          {snapshotChatSending ? "Sending…" : "Send"}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -3294,6 +3335,7 @@ function ContentOSApp() {
   });
   const [n8n, setN8N] = useLocal("contentos.n8n", { webhook: "" });
   const [snapshotChatDraft, setSnapshotChatDraft] = useState("");
+  const [sectionChatDrafts, setSectionChatDrafts] = useState({});
   const [snapshotChatSending, setSnapshotChatSending] = useState(false);
 
   // social presets
@@ -3493,6 +3535,7 @@ function ContentOSApp() {
       setN8N(data.n8n || { webhook: "" });
       setLocks(data.locks || { brand: false });
       setSnapshotChatDraft("");
+      setSectionChatDrafts({});
       setSnapshotChatSending(false);
       setHasUnsavedSettings(false);
       setActiveArchiveId(entry.id);
@@ -3517,6 +3560,7 @@ function ContentOSApp() {
       setN8N,
       setLocks,
       setSnapshotChatDraft,
+      setSectionChatDrafts,
       setSnapshotChatSending,
       setHasUnsavedSettings,
       setShowWelcome,
@@ -3735,40 +3779,44 @@ function ContentOSApp() {
   };
 
   // snapshot/article change requests
-  const sendSnapshotChat = async () => {
-    if (snapshotChatSending) return;
-    const trimmed = snapshotChatDraft.trim();
-    if (!trimmed) {
-      alert("Please type a message before sending.");
-      return;
-    }
+  const postSnapshotChatMessage = useCallback(
+    async ({ message, sectionId, sectionTitle, onSuccess } = {}) => {
+      if (snapshotChatSending) return;
+      const rawMessage = typeof message === "string" ? message : "";
+      const trimmed = rawMessage.trim();
+      if (!trimmed) {
+        alert("Please type a message before sending.");
+        return;
+      }
 
-    const userMessage = {
-      id: uuid(),
-      role: "user",
-      text: trimmed,
-      timestamp: new Date().toISOString(),
-    };
+      const decoratedText = sectionTitle
+        ? `${sectionTitle}: ${trimmed}`
+        : trimmed;
 
-    let historyForWebhook = [];
-    setSnapshotChatMessages((prev) => {
-      historyForWebhook = [...prev, userMessage];
-      return historyForWebhook;
-    });
-    if (!historyForWebhook.length) {
-      historyForWebhook = [userMessage];
-    }
-    setSnapshotChatDraft("");
-    setSnapshotChatSending(true);
+      const userMessage = {
+        id: uuid(),
+        role: "user",
+        text: decoratedText,
+        timestamp: new Date().toISOString(),
+        sectionId,
+      };
 
-    try {
-      const response = await fetch(WEBHOOKS.snapshotChange, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      let historyForWebhook = [];
+      setSnapshotChatMessages((prev) => {
+        historyForWebhook = [...prev, userMessage];
+        return historyForWebhook;
+      });
+      if (!historyForWebhook.length) {
+        historyForWebhook = [userMessage];
+      }
+      onSuccess?.();
+      setSnapshotChatSending(true);
+
+      try {
+        const payload = {
           type: "snapshot_change_chat",
           timestamp: new Date().toISOString(),
-          message: trimmed,
+          message: decoratedText,
           history: historyForWebhook.map(({ role, text, timestamp }) => ({
             role,
             text,
@@ -3778,38 +3826,94 @@ function ContentOSApp() {
           topics,
           brand,
           sessionId: ensureSessionId(),
-        }),
-      });
+        };
+        if (sectionId) {
+          payload.sectionContext = {
+            id: sectionId,
+            title: sectionTitle || sectionId,
+          };
+        }
 
-      if (!response.ok) throw new Error("HTTP error");
+        const response = await fetch(WEBHOOKS.snapshotChange, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-      const replyText = (await response.text()).trim();
-      if (replyText) {
+        if (!response.ok) throw new Error("HTTP error");
+
+        const replyText = (await response.text()).trim();
+        if (replyText) {
+          setSnapshotChatMessages((prev) => [
+            ...prev,
+            {
+              id: uuid(),
+              role: "assistant",
+              text: replyText,
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+        }
+      } catch (e) {
+        console.error(e);
         setSnapshotChatMessages((prev) => [
           ...prev,
           {
             id: uuid(),
-            role: "assistant",
-            text: replyText,
+            role: "system",
+            text: "Sorry, we couldn't send your request. Please try again.",
             timestamp: new Date().toISOString(),
           },
         ]);
+      } finally {
+        setSnapshotChatSending(false);
       }
-    } catch (e) {
-      console.error(e);
-      setSnapshotChatMessages((prev) => [
-        ...prev,
-        {
-          id: uuid(),
-          role: "system",
-          text: "Sorry, we couldn't send your request. Please try again.",
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-    } finally {
-      setSnapshotChatSending(false);
-    }
-  };
+    },
+    [
+      snapshotChatSending,
+      setSnapshotChatMessages,
+      setSnapshotChatSending,
+      snapshot.text,
+      topics,
+      brand,
+      ensureSessionId,
+    ]
+  );
+
+  const sendSnapshotChat = useCallback(() => {
+    postSnapshotChatMessage({
+      message: snapshotChatDraft,
+      onSuccess: () => setSnapshotChatDraft(""),
+    });
+  }, [postSnapshotChatMessage, snapshotChatDraft, setSnapshotChatDraft]);
+
+  const sendSectionChat = useCallback(
+    (sectionId, sectionTitle) => {
+      const draft = sectionChatDrafts[sectionId] || "";
+      postSnapshotChatMessage({
+        message: draft,
+        sectionId,
+        sectionTitle,
+        onSuccess: () =>
+          setSectionChatDrafts((prev) => ({ ...prev, [sectionId]: "" })),
+      });
+    },
+    [postSnapshotChatMessage, sectionChatDrafts, setSectionChatDrafts]
+  );
+
+  const handleSectionChatKeyDown = useCallback(
+    (event, sectionId, sectionTitle) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        const draft = sectionChatDrafts[sectionId] || "";
+        if (!draft.trim() || snapshotChatSending) {
+          return;
+        }
+        sendSectionChat(sectionId, sectionTitle);
+      }
+    },
+    [sectionChatDrafts, sendSectionChat, snapshotChatSending]
+  );
 
   const [articleChange, setArticleChange] = useState("");
   const [sendingArticle, setSendingArticle] = useState(false);
@@ -3864,6 +3968,7 @@ function ContentOSApp() {
     setSnapshot(createEmptySnapshotState());
     setSnapshotChatMessages([]);
     setSnapshotChatDraft("");
+    setSectionChatDrafts({});
     setSnapshotChatSending(false);
     setArticle({ content: "", savedAt: null });
     setPodcast({ title: "", outline: "" });
