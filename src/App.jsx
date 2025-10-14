@@ -1596,25 +1596,14 @@ function SnapshotPage({
   topics,
   snapshot,
   setSnapshot,
-  snapshotChatMessages,
-  snapshotChatDraft,
-  setSnapshotChatDraft,
-  snapshotChatSending,
-  sendSnapshotChat,
   navTo,
   webhooks,
   brand,
   ensureSessionId,
 }) {
   const [generatingSnapshot, setGeneratingSnapshot] = useState(false);
-  const chatContainerRef = useRef(null);
   const [draggingSectionId, setDraggingSectionId] = useState(null);
   const [printStamp] = useState(() => new Date());
-
-  useEffect(() => {
-    if (!chatContainerRef.current) return;
-    chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-  }, [snapshotChatMessages]);
 
   const sectionsWithMeta = useMemo(() => {
     const baseSections =
@@ -1698,14 +1687,6 @@ function SnapshotPage({
     [setSnapshot]
   );
 
-  const handleSnapshotChatKeyDown = (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      if (!snapshotChatSending) {
-        sendSnapshotChat();
-      }
-    }
-  };
 
   const handleDragStart = useCallback((event, id) => {
     event.dataTransfer.effectAllowed = "move";
@@ -1942,73 +1923,6 @@ function SnapshotPage({
                 </div>
               )}
             </div>
-            <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
-              <h3 className="text-lg font-semibold text-slate-100">
-                Request changes to this snapshot
-              </h3>
-              <p className="text-xs text-slate-400">
-                Start a chat with the editing team. Each message is sent to the webhook
-                below and replies appear here automatically.
-              </p>
-              <div
-                ref={chatContainerRef}
-                className="mt-4 flex h-64 flex-col gap-3 overflow-y-auto rounded-2xl border border-[#2a3357] bg-[#0a0f22] p-3"
-              >
-                {snapshotChatMessages.length ? (
-                  snapshotChatMessages.map((message) => {
-                    const role = message.role || "assistant";
-                    const alignment = role === "user" ? "items-end" : "items-start";
-                    let bubbleClasses =
-                      "bg-[#121629] border border-[#2a3357] text-slate-200";
-                    if (role === "user") {
-                      bubbleClasses = "bg-[#222845] text-slate-100";
-                    } else if (role === "system") {
-                      bubbleClasses =
-                        "bg-[#2f1f2f] border border-[#533553] text-rose-100";
-                    }
-                    return (
-                      <div
-                        key={message.id || message.timestamp}
-                        className={`flex ${alignment}`}
-                      >
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${bubbleClasses}`}
-                        >
-                          {message.text}
-                        </div>
-                        <span className="sr-only">{message.timestamp}</span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="py-10 text-center text-xs text-slate-400">
-                    No messages yet. Send a request to get started.
-                  </div>
-                )}
-              </div>
-              <div className="mt-3">
-                <textarea
-                  value={snapshotChatDraft}
-                  onChange={(event) => setSnapshotChatDraft(event.target.value)}
-                  onKeyDown={handleSnapshotChatKeyDown}
-                  rows={3}
-                  placeholder="Type your change request… Press Enter to send, or Shift + Enter for a new line."
-                  className="w-full rounded-xl border border-[#232941] bg-[#0f1427] p-3 text-sm"
-                />
-              </div>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="break-all text-xs text-slate-400 sm:pr-3">
-                  {webhooks?.snapshotChange}
-                </p>
-                <button
-                  onClick={sendSnapshotChat}
-                  disabled={snapshotChatSending}
-                  className="rounded-xl bg-white px-4 py-2 font-bold text-[#0b1020] transition disabled:opacity-60"
-                >
-                  {snapshotChatSending ? "Sending…" : "Send message"}
-                </button>
-              </div>
-            </div>
           </div>
         </aside>
         <div className="flex-1 space-y-6">
@@ -2095,38 +2009,6 @@ function SnapshotPage({
                 </div>
               );
             })}
-          </div>
-          <div className="snapshot-preview-card rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-100">
-              Snapshot Preview
-            </h3>
-            <p className="text-sm text-slate-300">
-              Review how the narrative reads before exporting or printing.
-            </p>
-            <div className="mt-4 space-y-4">
-              {previewSections.map((section) => (
-                <div
-                  key={section.id}
-                  className="snapshot-print-card rounded-xl border border-[#2a3357] bg-[#0f1427] p-4"
-                >
-                  <h4 className="text-base font-semibold text-slate-100">
-                    {section.definition.title}
-                  </h4>
-                  {section.trimmed ? (
-                    <div
-                      className="mt-2 text-sm leading-relaxed text-slate-200"
-                      dangerouslySetInnerHTML={{
-                        __html: ensureHtmlContent(section.content),
-                      }}
-                    />
-                  ) : (
-                    <p className="mt-2 text-xs italic text-slate-500">
-                      Not filled yet.
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
           </div>
           {snapshot.aiDraft ? (
             <div className="snapshot-preview-card rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
@@ -4070,11 +3952,6 @@ function ContentOSApp() {
             topics={topics}
             snapshot={snapshot}
             setSnapshot={setSnapshot}
-            snapshotChatMessages={snapshotChatMessages}
-            snapshotChatDraft={snapshotChatDraft}
-            setSnapshotChatDraft={setSnapshotChatDraft}
-            snapshotChatSending={snapshotChatSending}
-            sendSnapshotChat={sendSnapshotChat}
             navTo={navTo}
             webhooks={WEBHOOKS}
             brand={brand}
