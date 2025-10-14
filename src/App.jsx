@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.6";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.8";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -88,6 +88,77 @@ const SNAPSHOT_TEXT_KEYS = [
   "data",
 ];
 
+const SNAPSHOT_SECTION_DEFINITIONS = [
+  {
+    id: "problem",
+    title: "Problem",
+    helper: "State the cost of inaction in one sentence.",
+    placeholder: "e.g., \"Each launch loses 40% of warm leads before demo day.\"",
+    maxChars: 280,
+    required: true,
+  },
+  {
+    id: "model",
+    title: "Model",
+    helper: "Name the framework or method you’ll use to solve it.",
+    placeholder:
+      "e.g., \"The Launch Lift Framework rebuilds pre-demo nurture in 14 days.\"",
+    maxChars: 260,
+    required: true,
+  },
+  {
+    id: "metaphor",
+    title: "Metaphor",
+    helper: "Offer a vivid comparison that makes the model stick.",
+    placeholder:
+      "e.g., \"It’s like upgrading from a paper map to Waze for your buyer journey.\"",
+    maxChars: 180,
+    required: true,
+  },
+  {
+    id: "caseStat",
+    title: "Case / Stat",
+    helper: "Share one proof point—metric, testimonial, or mini-case.",
+    placeholder:
+      "e.g., \"After the shift, demos jumped 37% and close rates doubled in Q2.\"",
+    maxChars: 220,
+    required: true,
+  },
+  {
+    id: "actionSteps",
+    title: "Action Steps",
+    helper: "List 2–3 specific moves the audience can take next.",
+    placeholder:
+      "e.g., \"1. Audit handoff → 2. Patch nurture gaps → 3. Relaunch with live demo.\"",
+    maxChars: 260,
+    required: true,
+  },
+  {
+    id: "oneLiner",
+    title: "One-liner + Context",
+    helper: "Draft the hook and where you’ll use it.",
+    placeholder:
+      "e.g., \"Stop losing launch leads—drop this in the first slide of your sales deck.\"",
+    maxChars: 120,
+    required: true,
+  },
+];
+
+function createEmptySnapshotSections() {
+  return SNAPSHOT_SECTION_DEFINITIONS.map((definition) => ({
+    id: definition.id,
+    content: "",
+  }));
+}
+
+function createEmptySnapshotState() {
+  return {
+    sections: createEmptySnapshotSections(),
+    aiDraft: "",
+    text: "",
+  };
+}
+
 function extractSnapshotText(raw) {
   if (!raw) return "";
   try {
@@ -139,6 +210,88 @@ function isHtmlEmpty(value) {
     .replace(/&nbsp;/g, " ")
     .trim();
   return textOnly.length === 0;
+}
+
+function normalizeSnapshot(value) {
+  const base = createEmptySnapshotState();
+  if (!value || typeof value !== "object") {
+    return base;
+  }
+
+  const rawSections = Array.isArray(value.sections)
+    ? value.sections
+        .map((section) => ({
+          id: section.id,
+          content:
+            typeof section.content === "string" ? section.content : "",
+        }))
+        .filter((section) =>
+          SNAPSHOT_SECTION_DEFINITIONS.some((def) => def.id === section.id)
+        )
+    : [];
+
+  const sectionMap = new Map(
+    rawSections.map((section) => [section.id, section])
+  );
+  const normalizedBase = SNAPSHOT_SECTION_DEFINITIONS.map((definition) => ({
+    id: definition.id,
+    content: sectionMap.get(definition.id)?.content ?? "",
+  }));
+
+  const orderIds = rawSections.map((section) => section.id);
+  const orderedSections = [
+    ...orderIds
+      .map((id) => normalizedBase.find((section) => section.id === id))
+      .filter(Boolean),
+    ...normalizedBase.filter((section) => !orderIds.includes(section.id)),
+  ];
+
+  const aiDraftRaw =
+    typeof value.aiDraft === "string"
+      ? value.aiDraft
+      : typeof value.generatedHtml === "string"
+      ? value.generatedHtml
+      : typeof value.text === "string" && !rawSections.length
+      ? value.text
+      : "";
+
+  const aiDraft =
+    aiDraftRaw && !HTML_TAG_PATTERN.test(aiDraftRaw)
+      ? ensureHtmlContent(aiDraftRaw)
+      : aiDraftRaw || "";
+
+  return {
+    ...base,
+    ...value,
+    sections: orderedSections,
+    aiDraft,
+  };
+}
+
+function snapshotSectionsToHtml(sections) {
+  if (!Array.isArray(sections)) return "";
+  return sections
+    .map((section) => {
+      const definition = SNAPSHOT_SECTION_DEFINITIONS.find(
+        (def) => def.id === section.id
+      );
+      if (!definition) return "";
+      const content = (section.content || "").trim();
+      if (!content) return "";
+      const heading = escapeHtml(definition.title);
+      const bodyHtml = ensureHtmlContent(content);
+      return `<section><h3>${heading}</h3>${bodyHtml}</section>`;
+    })
+    .filter(Boolean)
+    .join("");
+}
+
+function finalizeSnapshot(value) {
+  const normalized = normalizeSnapshot(value);
+  return {
+    ...normalized,
+    text: snapshotSectionsToHtml(normalized.sections),
+  };
 }
 
 function RichTextEditor({ value, onChange, placeholder }) {
@@ -1455,11 +1608,87 @@ function SnapshotPage({
 }) {
   const [generatingSnapshot, setGeneratingSnapshot] = useState(false);
   const chatContainerRef = useRef(null);
+  const [draggingSectionId, setDraggingSectionId] = useState(null);
+  const [printStamp] = useState(() => new Date());
 
   useEffect(() => {
     if (!chatContainerRef.current) return;
     chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
   }, [snapshotChatMessages]);
+
+  const sectionsWithMeta = useMemo(() => {
+    const baseSections =
+      snapshot.sections && snapshot.sections.length
+        ? snapshot.sections
+        : createEmptySnapshotSections();
+    return baseSections.map((section) => {
+      const definition =
+        SNAPSHOT_SECTION_DEFINITIONS.find((def) => def.id === section.id) ?? {
+          id: section.id,
+          title: section.id,
+          helper: "",
+          placeholder: "",
+          maxChars: null,
+          required: false,
+        };
+      const content = typeof section.content === "string" ? section.content : "";
+      const trimmed = content.trim();
+      const charCount = content.length;
+      const words = trimmed
+        ? trimmed
+            .split(/\s+/)
+            .map((token) => token.trim())
+            .filter(Boolean)
+        : [];
+      const wordCount = words.length;
+      const limit =
+        typeof definition.maxChars === "number" ? definition.maxChars : null;
+      const overLimit = limit != null ? charCount > limit : false;
+      const nearLimit =
+        limit != null ? charCount > limit * 0.9 && !overLimit : false;
+      const isComplete = trimmed.length > 0 && !overLimit;
+      return {
+        ...section,
+        definition,
+        content,
+        trimmed,
+        charCount,
+        wordCount,
+        limit,
+        overLimit,
+        nearLimit,
+        isComplete,
+      };
+    });
+  }, [snapshot.sections]);
+
+  const allRequiredComplete = useMemo(
+    () =>
+      sectionsWithMeta.every(
+        (section) =>
+          !section.definition.required || (section.trimmed && section.isComplete)
+      ),
+    [sectionsWithMeta]
+  );
+
+  const handleSectionChange = useCallback(
+    (id, value) => {
+      setSnapshot((prev) => {
+        const nextSections = (
+          prev.sections && prev.sections.length
+            ? prev.sections
+            : createEmptySnapshotSections()
+        ).map((section) =>
+          section.id === id ? { ...section, content: value } : section
+        );
+        return {
+          ...prev,
+          sections: nextSections,
+        };
+      });
+    },
+    [setSnapshot]
+  );
 
   const handleSnapshotChatKeyDown = (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -1470,7 +1699,52 @@ function SnapshotPage({
     }
   };
 
-  const requestSnapshot = async () => {
+  const handleDragStart = useCallback((event, id) => {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", id);
+    setDraggingSectionId(id);
+  }, []);
+
+  const handleDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const handleDrop = useCallback(
+    (event, targetId) => {
+      event.preventDefault();
+      const sourceId =
+        draggingSectionId || event.dataTransfer.getData("text/plain");
+      setDraggingSectionId(null);
+      if (!sourceId || sourceId === targetId) return;
+      setSnapshot((prev) => {
+        const currentSections =
+          prev.sections && prev.sections.length
+            ? [...prev.sections]
+            : createEmptySnapshotSections();
+        const fromIndex = currentSections.findIndex(
+          (section) => section.id === sourceId
+        );
+        const toIndex = currentSections.findIndex(
+          (section) => section.id === targetId
+        );
+        if (fromIndex === -1 || toIndex === -1) return prev;
+        const [moved] = currentSections.splice(fromIndex, 1);
+        currentSections.splice(toIndex, 0, moved);
+        return {
+          ...prev,
+          sections: currentSections,
+        };
+      });
+    },
+    [draggingSectionId, setSnapshot]
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setDraggingSectionId(null);
+  }, []);
+
+  const requestSnapshot = useCallback(async () => {
     if (!webhooks?.snapshotGenerate || generatingSnapshot) return;
     try {
       setGeneratingSnapshot(true);
@@ -1493,147 +1767,421 @@ function SnapshotPage({
       if (!res.ok) throw new Error("HTTP error");
       const rawText = await res.text();
       const extracted = extractSnapshotText(rawText).trim();
-      setSnapshot({
-        text: extracted ? ensureHtmlContent(extracted) : "",
-      });
+      setSnapshot((prev) => ({
+        ...prev,
+        aiDraft: extracted ? ensureHtmlContent(extracted) : "",
+      }));
       alert("Requested delivery snapshot generation ✔︎");
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       alert("Could not reach the delivery snapshot webhook.");
     } finally {
       setGeneratingSnapshot(false);
     }
-  };
+  }, [
+    webhooks,
+    generatingSnapshot,
+    snapshot.text,
+    topics,
+    brand,
+    ensureSessionId,
+    setSnapshot,
+  ]);
+
+  const brandSummary = useMemo(() => {
+    if (!brand) return "";
+    const fragments = [
+      brand.archetype && `Archetype: ${brand.archetype}`,
+      brand.audience && `Audience: ${brand.audience}`,
+      brand.tone && `Tone: ${brand.tone}`,
+      brand.values && `Values: ${brand.values}`,
+      brand.phrases && `Phrases: ${brand.phrases}`,
+      brand.style && `Style: ${brand.style}`,
+    ].filter(Boolean);
+    return fragments.join(" • ");
+  }, [brand]);
+
+  const formattedPrintDate = useMemo(
+    () =>
+      printStamp.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }),
+    [printStamp]
+  );
+
+  const previewSections = sectionsWithMeta;
+
+  const statusMessage = allRequiredComplete
+    ? "All sections are ready to export."
+    : "Complete each section to unlock export and send.";
+
   return (
     <section className="min-h-screen px-[7vw] py-16">
-      <header className="mb-4">
-        <h2 className="text-2xl font-semibold">Delivery Snapshot</h2>
-      </header>
-      {!!topics.length && (
-        <div className="mb-4 bg-[#121629] border border-[#232941] rounded-2xl p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm text-slate-300">Selected topics</span>
-            <button
-              type="button"
-              onClick={() => navTo("topics")}
-              className="text-xs font-semibold px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
-            >
-              Change Topic
-            </button>
-          </div>
-          <ul className="grid md:grid-cols-2 gap-3">
-            {topics.map((t) => (
-              <li
-                key={t.id}
-                className="bg-[#151a32] border border-[#232941] rounded-xl p-3"
-              >
-                <div className="font-semibold">{t.name}</div>
-                {t.context && (
-                  <p className="text-sm text-slate-300 mt-1">{t.context}</p>
-                )}
-              </li>
-            ))}
-          </ul>
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-50">Delivery Snapshot</h2>
+          <p className="mt-1 text-sm text-slate-300">
+            Make each section crisp and scan-friendly before exporting to your team.
+          </p>
         </div>
-      )}
-
-      <div className="bg-[#121629] border border-[#232941] rounded-2xl p-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-          <h3 className="text-lg font-semibold">Delivery Snapshot Draft</h3>
-          <div className="flex flex-col items-start sm:items-end">
-            <button
-              type="button"
-              onClick={requestSnapshot}
-              disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
-              className="bg-[#222845] border border-[#2a3357] text-white font-bold px-4 py-2 rounded-xl disabled:opacity-60"
-            >
-              {generatingSnapshot ? "Requesting…" : "Generate My Delivery Snapshot"}
-            </button>
-            <p className="mt-1 text-xs italic text-slate-400 text-left sm:text-right">
-              {webhooks?.snapshotGenerate}
-            </p>
-          </div>
-        </div>
-        <label className="block text-sm">
-          Snapshot (free-form)
-          <div className="mt-2">
-            <RichTextEditor
-              value={snapshot.text}
-              onChange={(html) => setSnapshot({ text: html })}
-              placeholder="This will be filled automatically by n8n later…"
-            />
-          </div>
-        </label>
-        <button
-          onClick={() => {
-            navTo("article");
-          }}
-          className="mt-3 bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
-        >
-          Save & Continue →
-        </button>
-      </div>
-
-      <div className="mt-6 bg-[#121629] border border-[#232941] rounded-2xl p-4">
-        <h3 className="text-lg font-semibold mb-1">
-          Request changes to this snapshot
-        </h3>
-        <p className="text-xs text-slate-400">
-          Start a chat with the editing team. Each message is sent to the webhook
-          below and replies appear here automatically.
-        </p>
-        <div
-          ref={chatContainerRef}
-          className="mt-3 h-64 overflow-y-auto bg-[#0a0f22] border border-[#2a3357] rounded-2xl p-3 flex flex-col gap-3"
-        >
-          {snapshotChatMessages.length ? (
-            snapshotChatMessages.map((message) => {
-              const role = message.role || "assistant";
-              const alignment = role === "user" ? "items-end" : "items-start";
-              let bubbleClasses = "bg-[#121629] border border-[#2a3357] text-slate-200";
-              if (role === "user") {
-                bubbleClasses = "bg-[#222845] text-slate-100";
-              } else if (role === "system") {
-                bubbleClasses = "bg-[#2f1f2f] border border-[#533553] text-rose-100";
+        <div className="print-hidden flex items-center gap-3">
+          <span className="inline-flex items-center rounded-full border border-[#2a3357] bg-[#121629] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-300">
+            v{APP_VERSION}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.print();
               }
-              return (
-                <div key={message.id || message.timestamp} className={`flex ${alignment}`}>
-                  <div
-                    className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${bubbleClasses}`}
-                  >
-                    {message.text}
-                  </div>
-                  <span className="sr-only">{message.timestamp}</span>
+            }}
+            className="rounded-xl border border-[#2a3357] bg-white/10 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
+          >
+            Print Snapshot
+          </button>
+        </div>
+      </header>
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <aside className="print-hidden lg:w-64 lg:flex-shrink-0">
+          <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 lg:sticky lg:top-24">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
+              Section status
+            </h3>
+            <ol className="mt-4 space-y-4">
+              {sectionsWithMeta.map((section) => {
+                const complete = section.isComplete;
+                const over = section.overLimit;
+                return (
+                  <li key={section.id} className="flex items-start gap-3">
+                    <span
+                      className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold ${
+                        complete
+                          ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-200"
+                          : over
+                          ? "border-rose-500/40 bg-rose-500/20 text-rose-200"
+                          : "border-[#2a3357] bg-[#0f1427] text-slate-300"
+                      }`}
+                    >
+                      {complete ? "✓" : over ? "!" : "•"}
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-100">
+                        {section.definition.title}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {complete
+                          ? "Ready"
+                          : over
+                          ? "Trim to meet the target"
+                          : "Needs input"}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="mt-6 text-xs text-slate-400">{statusMessage}</p>
+          </div>
+        </aside>
+        <div className="flex-1 space-y-6">
+          {!!topics.length && (
+            <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+                    Selected topics
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    These inform tone, proof points, and context.
+                  </p>
                 </div>
-              );
-            })
-          ) : (
-            <div className="text-xs text-slate-400 text-center py-10">
-              No messages yet. Send a request to get started.
+                <button
+                  type="button"
+                  onClick={() => navTo("topics")}
+                  className="print-hidden rounded-lg border border-[#2a3357] px-3 py-1 text-xs font-semibold text-slate-100 transition hover:bg-[#151a32]"
+                >
+                  Change Topic
+                </button>
+              </div>
+              <ul className="grid gap-3 md:grid-cols-2">
+                {topics.map((topic) => (
+                  <li
+                    key={topic.id}
+                    className="rounded-xl border border-[#2a3357] bg-[#151a32] p-4"
+                  >
+                    <div className="font-semibold text-slate-100">{topic.name}</div>
+                    {topic.context && (
+                      <p className="mt-2 text-sm text-slate-300">{topic.context}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
+          <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">
+                  Delivery Snapshot Draft
+                </h3>
+                <p className="text-sm text-slate-300">
+                  Fill the sections below. We’ll stitch them together for export, print, and change requests.
+                </p>
+              </div>
+              <div className="print-hidden flex flex-col items-start gap-2 sm:items-end">
+                <button
+                  type="button"
+                  onClick={requestSnapshot}
+                  disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
+                  className="rounded-xl border border-[#2a3357] bg-[#222845] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {generatingSnapshot
+                    ? "Requesting…"
+                    : "Generate My Delivery Snapshot"}
+                </button>
+                <p className="break-all text-xs italic text-slate-400">
+                  {webhooks?.snapshotGenerate}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {sectionsWithMeta.map((section) => {
+              const definition = section.definition;
+              const limit = section.limit;
+              let badgeTone =
+                "border-[#2a3357] bg-[#0f1427] text-slate-200";
+              if (section.overLimit) {
+                badgeTone = "border-rose-500/40 bg-rose-500/20 text-rose-100";
+              } else if (section.nearLimit) {
+                badgeTone = "border-amber-500/40 bg-amber-500/20 text-amber-100";
+              }
+              return (
+                <div
+                  key={section.id}
+                  className={`snapshot-section-card rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm transition ${
+                    draggingSectionId === section.id
+                      ? "ring-2 ring-[#566fee]/50"
+                      : ""
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDrop={(event) => handleDrop(event, section.id)}
+                >
+                  <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      className="print-hidden mt-1 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#2a3357] bg-[#0f1427] text-slate-300 transition hover:bg-[#151a32]"
+                      draggable
+                      onDragStart={(event) => handleDragStart(event, section.id)}
+                      onDragEnd={handleDragEnd}
+                      aria-label={`Reorder ${definition.title}`}
+                      title="Drag to reorder"
+                    >
+                      <Icon.List className="h-4 w-4" />
+                    </button>
+                    <div className="flex-1">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-slate-50">
+                            {definition.title}
+                          </h3>
+                          {definition.helper && (
+                            <p className="text-sm text-slate-400">
+                              {definition.helper}
+                            </p>
+                          )}
+                        </div>
+                        <span
+                          className={`mt-1 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeTone}`}
+                        >
+                          {limit != null
+                            ? `${section.charCount}/${limit} chars`
+                            : `${section.charCount} chars`}
+                        </span>
+                      </div>
+                      <textarea
+                        value={section.content}
+                        onChange={(event) =>
+                          handleSectionChange(section.id, event.target.value)
+                        }
+                        rows={definition.id === "actionSteps" ? 5 : 4}
+                        placeholder={definition.placeholder}
+                        className="mt-4 w-full resize-vertical rounded-xl border border-[#2a3357] bg-[#0f1427] p-4 text-sm leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#566fee]/50"
+                      />
+                      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-400">
+                        <span>
+                          {section.wordCount} {section.wordCount === 1 ? "word" : "words"}
+                        </span>
+                        {limit != null && <span>Target ≤ {limit} chars</span>}
+                        {section.overLimit ? (
+                          <span className="text-rose-300">
+                            Over target — trim this section.
+                          </span>
+                        ) : section.nearLimit ? (
+                          <span className="text-amber-200">
+                            Approaching the limit.
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="snapshot-preview-card rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
+            <h3 className="text-lg font-semibold text-slate-100">
+              Snapshot Preview
+            </h3>
+            <p className="text-sm text-slate-300">
+              Review how the narrative reads before exporting or printing.
+            </p>
+            <div className="mt-4 space-y-4">
+              {previewSections.map((section) => (
+                <div
+                  key={section.id}
+                  className="snapshot-print-card rounded-xl border border-[#2a3357] bg-[#0f1427] p-4"
+                >
+                  <h4 className="text-base font-semibold text-slate-100">
+                    {section.definition.title}
+                  </h4>
+                  {section.trimmed ? (
+                    <div
+                      className="mt-2 text-sm leading-relaxed text-slate-200"
+                      dangerouslySetInnerHTML={{
+                        __html: ensureHtmlContent(section.content),
+                      }}
+                    />
+                  ) : (
+                    <p className="mt-2 text-xs italic text-slate-500">
+                      Not filled yet.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          {snapshot.aiDraft ? (
+            <div className="snapshot-preview-card rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-100">
+                    Latest AI Draft
+                  </h3>
+                  <p className="text-sm text-slate-300">
+                    Captured from the generation webhook response.
+                  </p>
+                </div>
+              </div>
+              <div
+                className="snapshot-print-card mt-4 space-y-3 rounded-xl border border-dashed border-[#2a3357] bg-[#0f1427] p-4 text-sm leading-relaxed text-slate-200"
+                dangerouslySetInnerHTML={{ __html: snapshot.aiDraft }}
+              />
+            </div>
+          ) : null}
+          <div className="print-hidden rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
+            <h3 className="text-lg font-semibold text-slate-100">
+              Request changes to this snapshot
+            </h3>
+            <p className="text-xs text-slate-400">
+              Start a chat with the editing team. Each message is sent to the webhook
+              below and replies appear here automatically.
+            </p>
+            <div
+              ref={chatContainerRef}
+              className="mt-4 flex h-64 flex-col gap-3 overflow-y-auto rounded-2xl border border-[#2a3357] bg-[#0a0f22] p-3"
+            >
+              {snapshotChatMessages.length ? (
+                snapshotChatMessages.map((message) => {
+                  const role = message.role || "assistant";
+                  const alignment = role === "user" ? "items-end" : "items-start";
+                  let bubbleClasses =
+                    "bg-[#121629] border border-[#2a3357] text-slate-200";
+                  if (role === "user") {
+                    bubbleClasses = "bg-[#222845] text-slate-100";
+                  } else if (role === "system") {
+                    bubbleClasses =
+                      "bg-[#2f1f2f] border border-[#533553] text-rose-100";
+                  }
+                  return (
+                    <div
+                      key={message.id || message.timestamp}
+                      className={`flex ${alignment}`}
+                    >
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${bubbleClasses}`}
+                      >
+                        {message.text}
+                      </div>
+                      <span className="sr-only">{message.timestamp}</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-10 text-center text-xs text-slate-400">
+                  No messages yet. Send a request to get started.
+                </div>
+              )}
+            </div>
+            <div className="mt-3">
+              <textarea
+                value={snapshotChatDraft}
+                onChange={(event) => setSnapshotChatDraft(event.target.value)}
+                onKeyDown={handleSnapshotChatKeyDown}
+                rows={3}
+                placeholder="Type your change request… Press Enter to send, or Shift + Enter for a new line."
+                className="w-full rounded-xl border border-[#232941] bg-[#0f1427] p-3 text-sm"
+              />
+            </div>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="break-all text-xs text-slate-400 sm:pr-3">
+                {webhooks?.snapshotChange}
+              </p>
+              <button
+                onClick={sendSnapshotChat}
+                disabled={snapshotChatSending}
+                className="rounded-xl bg-white px-4 py-2 font-bold text-[#0b1020] transition disabled:opacity-60"
+              >
+                {snapshotChatSending ? "Sending…" : "Send message"}
+              </button>
+            </div>
+          </div>
+          <div className="print-hidden mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-slate-400">{statusMessage}</p>
+            <button
+              onClick={() => navTo("article")}
+              disabled={!allRequiredComplete}
+              className="rounded-xl bg-white px-4 py-2 font-bold text-[#0b1020] transition disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Export Snapshot & Continue →
+            </button>
+          </div>
         </div>
-        <div className="mt-3">
-          <textarea
-            value={snapshotChatDraft}
-            onChange={(e) => setSnapshotChatDraft(e.target.value)}
-            onKeyDown={handleSnapshotChatKeyDown}
-            rows={3}
-            placeholder="Type your change request… Press Enter to send, or Shift + Enter for a new line."
-            className="w-full bg-[#0f1427] border border-[#232941] rounded-xl p-3 text-sm"
-          />
+      </div>
+      <div className="snapshot-print-only">
+        <h1 className="snapshot-print-title">Delivery Snapshot</h1>
+        <p className="snapshot-print-meta">Prepared {formattedPrintDate}</p>
+        <div className="snapshot-print-sections">
+          {previewSections.map((section) => (
+            <div key={section.id} className="snapshot-print-card">
+              <h2>{section.definition.title}</h2>
+              {section.trimmed ? (
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: ensureHtmlContent(section.content),
+                  }}
+                />
+              ) : (
+                <p className="snapshot-print-empty">Not provided.</p>
+              )}
+            </div>
+          ))}
         </div>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-slate-400 break-all sm:pr-3">
-            {webhooks.snapshotChange}
-          </p>
-          <button
-            onClick={sendSnapshotChat}
-            disabled={snapshotChatSending}
-            className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60"
-          >
-            {snapshotChatSending ? "Sending…" : "Send message"}
-          </button>
+        <div className="snapshot-print-footer">
+          <strong>Brand Context</strong>
+          <div>{brandSummary || "No brand context captured yet."}</div>
         </div>
       </div>
     </section>
@@ -2726,7 +3274,24 @@ function ContentOSApp() {
   const [editingTopicId, setEditingTopicId] = useState(null);
   const [tempTopic, setTempTopic] = useState("");
   const [tempContext, setTempContext] = useState("");
-  const [snapshot, setSnapshot] = useLocal("contentos.snapshot", { text: "" });
+  const [snapshotState, setSnapshotState] = useLocal(
+    "contentos.snapshot",
+    finalizeSnapshot(createEmptySnapshotState())
+  );
+  const snapshot = useMemo(
+    () => finalizeSnapshot(snapshotState),
+    [snapshotState]
+  );
+  const setSnapshot = useCallback(
+    (updater) =>
+      setSnapshotState((prev) => {
+        const base = finalizeSnapshot(prev);
+        const nextValue =
+          typeof updater === "function" ? updater(base) : updater;
+        return finalizeSnapshot(nextValue);
+      }),
+    [setSnapshotState]
+  );
   const [snapshotChatMessages, setSnapshotChatMessages] = useLocal(
     "contentos.snapshot.chat",
     []
@@ -2911,7 +3476,7 @@ function ContentOSApp() {
       setEditingTopicId(null);
       setTempTopic("");
       setTempContext("");
-      setSnapshot(data.snapshot || { text: "" });
+      setSnapshot(data.snapshot || createEmptySnapshotState());
       setSnapshotChatMessages(data.snapshotChatMessages || []);
       setArticle(
         data.article || {
@@ -3308,7 +3873,7 @@ function ContentOSApp() {
     setTopics([]);
     setTempTopic("");
     setTempContext("");
-    setSnapshot({ text: "" });
+    setSnapshot(createEmptySnapshotState());
     setSnapshotChatMessages([]);
     setSnapshotChatDraft("");
     setSnapshotChatSending(false);

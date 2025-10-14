@@ -12,6 +12,60 @@ body {
     sans-serif;
 }
 
+.snapshot-section-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.snapshot-section-card:hover,
+.snapshot-section-card:focus-within {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 48px rgba(8, 10, 24, 0.35);
+}
+
+.snapshot-preview-card {
+  box-shadow: 0 12px 40px rgba(8, 10, 24, 0.28);
+}
+
+.snapshot-print-only {
+  display: none;
+}
+
+.snapshot-print-title {
+  font-size: 1.75rem;
+  margin-bottom: 0.3in;
+  font-weight: 700;
+}
+
+.snapshot-print-meta {
+  font-size: 0.95rem;
+  color: #4b5563;
+  margin-bottom: 0.35in;
+}
+
+.snapshot-print-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35in;
+}
+
+.snapshot-print-card {
+  page-break-inside: avoid;
+}
+
+.snapshot-print-empty {
+  font-style: italic;
+  color: #6b7280;
+}
+
+.snapshot-print-footer {
+  margin-top: 0.6in;
+  padding-top: 0.3in;
+  border-top: 1px solid #d1d5db;
+  font-size: 0.85rem;
+  color: #374151;
+  text-align: center;
+}
+
 .rich-text-editor {
   color: #e2e8f0;
   line-height: 1.6;
@@ -45,4 +99,50 @@ body {
   border-left: 3px solid #2a3357;
   color: #cbd5f5;
   font-style: italic;
+}
+
+@media screen {
+  .snapshot-print-only {
+    display: none !important;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  .print-hidden {
+    display: none !important;
+  }
+
+  .snapshot-preview-card,
+  .snapshot-section-card {
+    box-shadow: none !important;
+    background: transparent !important;
+    border-color: #d1d5db !important;
+    color: #111827 !important;
+  }
+
+  .snapshot-print-only {
+    display: block !important;
+  }
+
+  .snapshot-print-card {
+    border: 1px solid #d1d5db;
+    padding: 0.3in;
+    background: #ffffff;
+  }
+
+  .snapshot-print-card h2 {
+    margin-top: 0;
+    margin-bottom: 0.15in;
+    font-size: 1.1rem;
+  }
+}
+
+@page {
+  size: A4;
+  margin: 20mm;
 }
