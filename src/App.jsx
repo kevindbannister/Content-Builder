@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.5";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.6";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -2614,8 +2614,14 @@ function ContentOSApp() {
     brand: false,
   });
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showNewBuildConfirm, setShowNewBuildConfirm] = useState(false);
+  const skipNextWelcomeRef = useRef(false);
   useEffect(() => {
     if (!session.id) {
+      if (skipNextWelcomeRef.current) {
+        skipNextWelcomeRef.current = false;
+        return;
+      }
       setShowWelcome(true);
     }
   }, [session.id]);
@@ -2955,20 +2961,10 @@ function ContentOSApp() {
   };
 
   // reset
-  const resetSession = () => {
-    if (view === "settings" && hasUnsavedSettings) {
-      const allow = window.confirm(
-        "You have unsaved settings. Leave without saving?"
-      );
-      if (!allow) return false;
-      setHasUnsavedSettings(false);
+  const resetSession = ({ showWelcomeOverlay = true } = {}) => {
+    if (!showWelcomeOverlay) {
+      skipNextWelcomeRef.current = true;
     }
-    if (
-      !window.confirm(
-        "Reset session? This clears topics, snapshot, article, social, locks, refdata, and webhook settings. Your saved settings remain until you reset them from the Settings page."
-      )
-    )
-      return false;
     try {
       const toDelete = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -3008,8 +3004,19 @@ function ContentOSApp() {
       window.location.hash = "topics";
     } catch {}
     setHasUnsavedSettings(false);
-    setShowWelcome(true);
+    setShowWelcome(showWelcomeOverlay);
     return true;
+  };
+
+  const requestNewSession = () => {
+    if (view === "settings" && hasUnsavedSettings) {
+      const allow = window.confirm(
+        "You have unsaved settings. Leave without saving?"
+      );
+      if (!allow) return;
+      setHasUnsavedSettings(false);
+    }
+    setShowNewBuildConfirm(true);
   };
 
   const flow = FLOW_ORDER;
@@ -3125,7 +3132,7 @@ function ContentOSApp() {
               Settings
             </button>
             <button
-              onClick={resetSession}
+              onClick={requestNewSession}
               className="px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
             >
               New
@@ -3349,6 +3356,46 @@ CTA: Save this and start.`,
                   className="order-1 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#0b1020] transition hover:bg-slate-100 sm:order-2"
                 >
                   Start new build
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showNewBuildConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#06091a]/70 backdrop-blur-sm">
+            <div className="max-w-xl w-full space-y-4 rounded-3xl border border-[#232941] bg-[#121629] p-6 shadow-2xl">
+              <header className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.25em] text-indigo-300/80">
+                  ContentOS
+                </p>
+                <h2 className="text-2xl font-semibold">Start a new build?</h2>
+                <p className="text-sm text-slate-300">
+                  This clears your current topics, delivery snapshot, content drafts, and integrations so you can begin fresh with new content. Are you sure you want to continue?
+                </p>
+              </header>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowNewBuildConfirm(false)}
+                  className="order-2 rounded-xl border border-[#2a3357] px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-[#151a32] sm:order-1"
+                >
+                  Keep current session
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const didReset = resetSession({
+                      showWelcomeOverlay: false,
+                    });
+                    if (!didReset) return;
+                    startNewSession();
+                    setShowNewBuildConfirm(false);
+                    setSidebarOpen(false);
+                    navTo("topics");
+                  }}
+                  className="order-1 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#0b1020] transition hover:bg-slate-100 sm:order-2"
+                >
+                  Yes, start fresh
                 </button>
               </div>
             </div>
