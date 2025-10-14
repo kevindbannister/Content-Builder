@@ -94,7 +94,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     title: "Problem",
     helper: "State the cost of inaction in one sentence.",
     placeholder: "e.g., \"Each launch loses 40% of warm leads before demo day.\"",
-    maxChars: 280,
+    maxWords: 280,
     required: true,
   },
   {
@@ -103,7 +103,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     helper: "Name the framework or method you’ll use to solve it.",
     placeholder:
       "e.g., \"The Launch Lift Framework rebuilds pre-demo nurture in 14 days.\"",
-    maxChars: 260,
+    maxWords: 280,
     required: true,
   },
   {
@@ -112,7 +112,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     helper: "Offer a vivid comparison that makes the model stick.",
     placeholder:
       "e.g., \"It’s like upgrading from a paper map to Waze for your buyer journey.\"",
-    maxChars: 180,
+    maxWords: 280,
     required: true,
   },
   {
@@ -121,7 +121,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     helper: "Share one proof point—metric, testimonial, or mini-case.",
     placeholder:
       "e.g., \"After the shift, demos jumped 37% and close rates doubled in Q2.\"",
-    maxChars: 220,
+    maxWords: 280,
     required: true,
   },
   {
@@ -130,7 +130,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     helper: "List 2–3 specific moves the audience can take next.",
     placeholder:
       "e.g., \"1. Audit handoff → 2. Patch nurture gaps → 3. Relaunch with live demo.\"",
-    maxChars: 260,
+    maxWords: 280,
     required: true,
   },
   {
@@ -139,7 +139,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     helper: "Draft the hook and where you’ll use it.",
     placeholder:
       "e.g., \"Stop losing launch leads—drop this in the first slide of your sales deck.\"",
-    maxChars: 120,
+    maxWords: 280,
     required: true,
   },
 ];
@@ -1628,12 +1628,11 @@ function SnapshotPage({
           title: section.id,
           helper: "",
           placeholder: "",
-          maxChars: null,
+          maxWords: null,
           required: false,
         };
       const content = typeof section.content === "string" ? section.content : "";
       const trimmed = content.trim();
-      const charCount = content.length;
       const words = trimmed
         ? trimmed
             .split(/\s+/)
@@ -1642,17 +1641,16 @@ function SnapshotPage({
         : [];
       const wordCount = words.length;
       const limit =
-        typeof definition.maxChars === "number" ? definition.maxChars : null;
-      const overLimit = limit != null ? charCount > limit : false;
+        typeof definition.maxWords === "number" ? definition.maxWords : null;
+      const overLimit = limit != null ? wordCount > limit : false;
       const nearLimit =
-        limit != null ? charCount > limit * 0.9 && !overLimit : false;
+        limit != null ? wordCount > limit * 0.9 && !overLimit : false;
       const isComplete = trimmed.length > 0 && !overLimit;
       return {
         ...section,
         definition,
         content,
         trimmed,
-        charCount,
         wordCount,
         limit,
         overLimit,
@@ -2054,8 +2052,8 @@ function SnapshotPage({
                           className={`mt-1 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeTone}`}
                         >
                           {limit != null
-                            ? `${section.charCount}/${limit} chars`
-                            : `${section.charCount} chars`}
+                            ? `${section.wordCount}/${limit} words`
+                            : `${section.wordCount} words`}
                         </span>
                       </div>
                       <textarea
@@ -2071,7 +2069,7 @@ function SnapshotPage({
                         <span>
                           {section.wordCount} {section.wordCount === 1 ? "word" : "words"}
                         </span>
-                        {limit != null && <span>Target ≤ {limit} chars</span>}
+                        {limit != null && <span>Target ≤ {limit} words</span>}
                         {section.overLimit ? (
                           <span className="text-rose-300">
                             Over target — trim this section.
