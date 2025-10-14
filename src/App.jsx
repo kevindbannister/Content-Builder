@@ -88,6 +88,205 @@ const SNAPSHOT_TEXT_KEYS = [
   "data",
 ];
 
+const ICON_COLOR = "#f6c863";
+
+const SNAPSHOT_SECTION_ICONS = {
+  problem: (props = {}) => (
+    <svg
+      viewBox="0 0 24 24"
+      role="presentation"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="8.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="11.1"
+        y="6.5"
+        width="1.8"
+        height="7.6"
+        rx="0.9"
+        fill="currentColor"
+      />
+      <circle cx="12" cy="17.4" r="1.1" fill="currentColor" />
+    </svg>
+  ),
+  model: (props = {}) => (
+    <svg
+      viewBox="0 0 24 24"
+      role="presentation"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <circle
+        cx="9.5"
+        cy="12"
+        r="5.75"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <circle
+        cx="14.5"
+        cy="12"
+        r="5.75"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M12 6.25a5.75 5.75 0 0 0 0 11.5 5.75 5.75 0 0 0 0-11.5Z"
+        fill="currentColor"
+        fillOpacity="0.35"
+      />
+    </svg>
+  ),
+  metaphor: (props = {}) => (
+    <svg
+      viewBox="0 0 24 24"
+      role="presentation"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <path
+        d="M6.5 6c-2.6 1.6-4 3.9-4 6.8 0 2.6 1.6 4.2 4 4.2a4.6 4.6 0 0 0 2.4-.6v-2.3a3 3 0 0 1-1.6.5c-1 0-1.7-.6-1.7-1.7 0-1.4 1-2.6 2.9-3.7V6Z"
+        fill="currentColor"
+      />
+      <path
+        d="M15.1 6c-2.5 1.6-3.9 3.9-3.9 6.8 0 2.6 1.6 4.2 3.9 4.2a4.7 4.7 0 0 0 2.5-.6v-2.3a2.9 2.9 0 0 1-1.6.5c-1 0-1.6-.6-1.6-1.7 0-1.4.9-2.6 2.8-3.7V6Z"
+        fill="currentColor"
+      />
+      <rect
+        x="5.5"
+        y="16.5"
+        width="13"
+        height="1.2"
+        rx="0.6"
+        fill="currentColor"
+        fillOpacity="0.35"
+      />
+    </svg>
+  ),
+  caseStat: (props = {}) => (
+    <svg
+      viewBox="0 0 24 24"
+      role="presentation"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <rect
+        x="5"
+        y="4.75"
+        width="14"
+        height="14.5"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M8 8.25h8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 11h8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 13.75h5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 16.5h3.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <circle cx="14.75" cy="16.5" r="1.25" fill="currentColor" />
+    </svg>
+  ),
+  actionSteps: (props = {}) => (
+    <svg
+      viewBox="0 0 24 24"
+      role="presentation"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <path
+        d="M12 3.75 13.9 7l3.85-.6-2.1 3.27 2.1 3.28-3.85-.61L12 15.5l-1.9-3.16-3.85.61 2.1-3.28-2.1-3.27 3.85.6Z"
+        fill="currentColor"
+        fillOpacity="0.4"
+      />
+      <path
+        d="M9.25 18.5h5.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10 15.75h4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 10.5v3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="7.5" r="1.2" fill="currentColor" />
+    </svg>
+  ),
+  oneLiner: (props = {}) => (
+    <svg
+      viewBox="0 0 24 24"
+      role="presentation"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <path
+        d="M4.5 17.5 9 10.75l3 2 3-4.5 4.5 9.25H4.5Z"
+        fill="currentColor"
+        fillOpacity="0.35"
+      />
+      <path
+        d="M4 17.5h16"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9 10.75 11.4 8l2.85 3.2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="9" cy="10.75" r="0.9" fill="currentColor" />
+      <circle cx="14.25" cy="10.75" r="0.9" fill="currentColor" />
+    </svg>
+  ),
+};
+
 const SNAPSHOT_SECTION_DEFINITIONS = [
   {
     id: "problem",
@@ -2016,6 +2215,7 @@ function SnapshotPage({
             {sectionsWithMeta.map((section) => {
               const definition = section.definition;
               const wordLimit = section.wordLimit;
+              const SectionIcon = SNAPSHOT_SECTION_ICONS[definition.id];
               let badgeTone =
                 "border-[#2a3357] bg-[#0f1427] text-slate-200";
               if (section.overLimit) {
@@ -2048,23 +2248,30 @@ function SnapshotPage({
                     </button>
                     <div className="flex-1">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <h3 className="text-xl font-bold text-slate-50">
-                            {definition.title}
-                          </h3>
-                          {definition.helper && (
-                            <p className="text-sm text-slate-400">
-                              {definition.helper}
-                            </p>
-                          )}
+                        <div className="flex items-start gap-3">
+                          {SectionIcon ? (
+                            <span className="mt-1 inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-[#2a3357] bg-[#0f1427]">
+                              <SectionIcon className="h-6 w-6" style={{ color: ICON_COLOR }} />
+                            </span>
+                          ) : null}
+                          <div>
+                            <h3 className="text-xl font-bold text-slate-50">
+                              {definition.title}
+                            </h3>
+                            {definition.helper && (
+                              <p className="text-sm text-slate-400">
+                                {definition.helper}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      <span
-                        className={`mt-1 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeTone}`}
-                      >
-                        {wordLimit != null
-                          ? `${section.wordCount}/${wordLimit} words`
-                          : `${section.wordCount} words`}
-                      </span>
+                        <span
+                          className={`mt-1 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeTone}`}
+                        >
+                          {wordLimit != null
+                            ? `${section.wordCount}/${wordLimit} words`
+                            : `${section.wordCount} words`}
+                        </span>
                       </div>
                       <textarea
                         value={section.content}
@@ -2104,28 +2311,38 @@ function SnapshotPage({
               Review how the narrative reads before exporting or printing.
             </p>
             <div className="mt-4 space-y-4">
-              {previewSections.map((section) => (
-                <div
-                  key={section.id}
-                  className="snapshot-print-card rounded-xl border border-[#2a3357] bg-[#0f1427] p-4"
-                >
-                  <h4 className="text-base font-semibold text-slate-100">
-                    {section.definition.title}
-                  </h4>
-                  {section.trimmed ? (
-                    <div
-                      className="mt-2 text-sm leading-relaxed text-slate-200"
-                      dangerouslySetInnerHTML={{
-                        __html: ensureHtmlContent(section.content),
-                      }}
-                    />
-                  ) : (
-                    <p className="mt-2 text-xs italic text-slate-500">
-                      Not filled yet.
-                    </p>
-                  )}
-                </div>
-              ))}
+              {previewSections.map((section) => {
+                const SectionIcon = SNAPSHOT_SECTION_ICONS[section.definition.id];
+                return (
+                  <div
+                    key={section.id}
+                    className="snapshot-print-card rounded-xl border border-[#2a3357] bg-[#0f1427] p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      {SectionIcon ? (
+                        <span className="mt-0.5 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-[#2a3357] bg-[#101529]">
+                          <SectionIcon className="h-5 w-5" style={{ color: ICON_COLOR }} />
+                        </span>
+                      ) : null}
+                      <h4 className="text-base font-semibold text-slate-100">
+                        {section.definition.title}
+                      </h4>
+                    </div>
+                    {section.trimmed ? (
+                      <div
+                        className="mt-2 text-sm leading-relaxed text-slate-200"
+                        dangerouslySetInnerHTML={{
+                          __html: ensureHtmlContent(section.content),
+                        }}
+                      />
+                    ) : (
+                      <p className="mt-2 text-xs italic text-slate-500">
+                        Not filled yet.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
           {snapshot.aiDraft ? (
@@ -2162,20 +2379,30 @@ function SnapshotPage({
         <h1 className="snapshot-print-title">Delivery Snapshot</h1>
         <p className="snapshot-print-meta">Prepared {formattedPrintDate}</p>
         <div className="snapshot-print-sections">
-          {previewSections.map((section) => (
-            <div key={section.id} className="snapshot-print-card">
-              <h2>{section.definition.title}</h2>
-              {section.trimmed ? (
-                <div
-                  dangerouslySetInnerHTML={{
-                    __html: ensureHtmlContent(section.content),
-                  }}
-                />
-              ) : (
-                <p className="snapshot-print-empty">Not provided.</p>
-              )}
-            </div>
-          ))}
+          {previewSections.map((section) => {
+            const SectionIcon = SNAPSHOT_SECTION_ICONS[section.definition.id];
+            return (
+              <div key={section.id} className="snapshot-print-card">
+                <div className="flex items-start gap-3">
+                  {SectionIcon ? (
+                    <span className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-[#f6c863]/15">
+                      <SectionIcon className="h-5 w-5" style={{ color: ICON_COLOR }} />
+                    </span>
+                  ) : null}
+                  <h2>{section.definition.title}</h2>
+                </div>
+                {section.trimmed ? (
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: ensureHtmlContent(section.content),
+                    }}
+                  />
+                ) : (
+                  <p className="snapshot-print-empty">Not provided.</p>
+                )}
+              </div>
+            );
+          })}
         </div>
         <div className="snapshot-print-footer">
           <strong>Brand Context</strong>
