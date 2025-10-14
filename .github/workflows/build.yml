@@ -23,13 +23,14 @@ jobs:
         shell: bash
         run: |
           if [ -f pnpm-lock.yaml ]; then
-            echo "pm=pnpm" >> $GITHUB_OUTPUT
+            PM=pnpm
           elif [ -f yarn.lock ]; then
-            echo "pm=yarn" >> $GITHUB_OUTPUT
+            PM=yarn
           else
-            echo "pm=npm" >> $GITHUB_OUTPUT
+            PM=npm
           fi
-          echo "Detected package manager: $(cat $GITHUB_OUTPUT || echo ${{ steps.pm.outputs.pm }})"
+          echo "pm=$PM" >> "$GITHUB_OUTPUT"
+          echo "Detected package manager: $PM"
 
       # ---------- CACHES ----------
       - name: Cache pnpm store
