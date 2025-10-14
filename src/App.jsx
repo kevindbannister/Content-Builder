@@ -1726,6 +1726,9 @@ function ShortFormVideosPage({
   const [scriptsError, setScriptsError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState(null);
+  const [editingQuestionText, setEditingQuestionText] = useState("");
+  const [editingQuestionError, setEditingQuestionError] = useState("");
 
   const questions = social.questions ?? [];
   const shortsList = social.shorts ?? [];
@@ -1753,6 +1756,50 @@ function ShortFormVideosPage({
       setShowShorts(true);
     }
   }, [hasShortScripts]);
+
+  useEffect(() => {
+    if (editingQuestionIndex == null) return;
+    if (!questions[editingQuestionIndex]) {
+      setEditingQuestionIndex(null);
+      setEditingQuestionText("");
+      setEditingQuestionError("");
+    }
+  }, [editingQuestionIndex, questions]);
+
+  const startEditingQuestion = (index) => {
+    const target = questions[index];
+    if (!target) return;
+    setEditingQuestionIndex(index);
+    setEditingQuestionText(target.text ?? "");
+    setEditingQuestionError("");
+  };
+
+  const cancelEditingQuestion = () => {
+    setEditingQuestionIndex(null);
+    setEditingQuestionText("");
+    setEditingQuestionError("");
+  };
+
+  const saveEditedQuestion = () => {
+    if (editingQuestionIndex == null) return;
+    const trimmed = editingQuestionText.trim();
+    if (!trimmed) {
+      setEditingQuestionError("Question cannot be empty.");
+      return;
+    }
+    setSocial((prev) => {
+      const existing = [...(prev.questions ?? [])];
+      if (!existing[editingQuestionIndex]) return prev;
+      existing[editingQuestionIndex] = {
+        ...existing[editingQuestionIndex],
+        text: trimmed,
+      };
+      return { ...prev, questions: existing };
+    });
+    setEditingQuestionIndex(null);
+    setEditingQuestionText("");
+    setEditingQuestionError("");
+  };
 
   const updateQuestionStatus = (index, nextStatus) => {
     const target = questions[index];
@@ -2042,9 +2089,56 @@ function ShortFormVideosPage({
                 <li key={q?.id ?? idx} className={`${baseClasses} ${statusClasses}`}>
                   {q ? (
                     <>
-                      <p className="font-medium text-sm leading-relaxed">
-                        {q.text}
-                      </p>
+                      {editingQuestionIndex === idx ? (
+                        <div className="space-y-3">
+                          <label className="block text-xs uppercase tracking-wide text-slate-400">
+                            Edit question
+                            <textarea
+                              value={editingQuestionText}
+                              onChange={(event) => {
+                                setEditingQuestionText(event.target.value);
+                                if (editingQuestionError) {
+                                  setEditingQuestionError("");
+                                }
+                              }}
+                              rows={3}
+                              className="mt-1 w-full bg-[#0f1427] border border-[#232941] rounded-xl p-2 text-sm"
+                            />
+                          </label>
+                          {editingQuestionError && (
+                            <p className="text-xs text-rose-400">{editingQuestionError}</p>
+                          )}
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            <button
+                              type="button"
+                              onClick={saveEditedQuestion}
+                              className="bg-white text-[#0b1020] font-semibold px-3 py-1.5 rounded-lg"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditingQuestion}
+                              className="border border-[#2a3357] px-3 py-1.5 rounded-lg"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="font-medium text-sm leading-relaxed">
+                            {q.text}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => startEditingQuestion(idx)}
+                            className="text-xs border border-[#2a3357] px-2 py-1 rounded-lg text-slate-300 hover:bg-[#1a2037]"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
                       <div className="mt-3 flex flex-wrap gap-4 text-xs">
                         <label className="inline-flex items-center gap-2 cursor-pointer">
                           <input
