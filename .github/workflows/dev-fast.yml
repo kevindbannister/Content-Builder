@@ -1,0 +1,74 @@
+name: Dev (Fast)
+
+on:
+  push:
+    branches-ignore: [ main ]
+    paths:
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "pnpm-lock.yaml"
+      - "yarn.lock"
+  workflow_dispatch:
+
+concurrency:
+  group: dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then echo "manager=pnpm" >> $GITHUB_OUTPUT; fi
+          if [ -f yarn.lock ]; then echo "manager=yarn" >> $GITHUB_OUTPUT; fi
+          if [ -f package-lock.json ]; then echo "manager=npm" >> $GITHUB_OUTPUT; fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.pm.outputs.manager == 'pnpm'
+        with: { version: 9 }
+
+      - name: Yarn cache dir
+        if: steps.pm.outputs.manager == 'yarn'
+        run: echo "YARN_CACHE_FOLDER=$(yarn cache dir)" >> $GITHUB_ENV
+
+      - uses: actions/cache@v4
+        if: steps.pm.outputs.manager == 'pnpm'
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+      - uses: actions/cache@v4
+        if: steps.pm.outputs.manager == 'yarn'
+        with:
+          path: ${{ env.YARN_CACHE_FOLDER }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: ${{ runner.os }}-yarn-
+      - uses: actions/cache@v4
+        if: steps.pm.outputs.manager == 'npm'
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-
+
+      # Fast installs for iteration
+      - name: Install deps (fast)
+        run: |
+          if [ "${{ steps.pm.outputs.manager }}" = "pnpm" ]; then pnpm install --frozen-lockfile --prefer-offline; \
+          elif [ "${{ steps.pm.outputs.manager }}" = "yarn" ]; then yarn install --frozen-lockfile --prefer-offline; \
+          else npm install --no-audit --no-fund; fi
+
+      # Build only (skip lint/tests in fast loop)
+      - name: Build
+        run: |
+          if [ "${{ steps.pm.outputs.manager }}" = "pnpm" ]; then pnpm build; \
+          elif [ "${{ steps.pm.outputs.manager }}" = "yarn" ]; then yarn build; \
+          else npm run build; fi
