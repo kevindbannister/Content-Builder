@@ -2087,79 +2087,60 @@ function SnapshotPage({
 
   return (
     <section className="min-h-screen px-[7vw] py-16">
-      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <header className="mb-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h2 className="text-3xl font-bold text-slate-50">Delivery Snapshot</h2>
           <p className="mt-1 text-sm text-slate-300">
             Make each section crisp and scan-friendly before exporting to your team.
           </p>
         </div>
-        <div className="print-hidden flex items-center gap-3">
-          <span className="inline-flex items-center rounded-full border border-[#2a3357] bg-[#121629] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-300">
-            v{APP_VERSION}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.print();
-              }
-            }}
-            className="rounded-xl border border-[#2a3357] bg-white/10 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
-          >
-            Print Snapshot
-          </button>
-        </div>
+        {!!topics.length && (
+          <div className="print-hidden w-full max-w-xl rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
+                  Selected topics
+                </h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  These inform tone, proof points, and context.
+                </p>
+              </div>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => navTo("topics")}
+                    className="rounded-lg border border-[#2a3357] px-3 py-1 text-xs font-semibold text-slate-100 transition hover:bg-[#151a32]"
+                  >
+                    Change Topic
+                  </button>
+                  <button
+                    type="button"
+                    onClick={requestSnapshot}
+                    disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
+                    className="rounded-xl border border-[#2a3357] bg-[#222845] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {generatingSnapshot ? "Requesting…" : "Generate My Delivery Snapshot"}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <ul className="grid gap-3 md:grid-cols-2">
+              {topics.map((topic) => (
+                <li key={topic.id} className="rounded-xl border border-[#2a3357] bg-[#151a32] p-4">
+                  <div className="font-semibold text-slate-100">{topic.name}</div>
+                  {topic.context && (
+                    <p className="mt-2 text-sm text-slate-300">{topic.context}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </header>
       <div className="flex flex-col gap-6 lg:flex-row">
         <aside className="print-hidden lg:w-80 lg:flex-shrink-0">
           <div className="flex flex-col gap-5 lg:sticky lg:top-24">
-            {!!topics.length && (
-              <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
-                      Selected topics
-                    </h4>
-                    <p className="mt-1 text-xs text-slate-400">
-                      These inform tone, proof points, and context.
-                    </p>
-                  </div>
-                  <div className="print-hidden flex flex-col items-stretch gap-2 sm:items-end">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                      <button
-                        type="button"
-                        onClick={() => navTo("topics")}
-                        className="rounded-lg border border-[#2a3357] px-3 py-1 text-xs font-semibold text-slate-100 transition hover:bg-[#151a32]"
-                      >
-                        Change Topic
-                      </button>
-                      <button
-                        type="button"
-                        onClick={requestSnapshot}
-                        disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
-                        className="rounded-xl border border-[#2a3357] bg-[#222845] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {generatingSnapshot ? "Requesting…" : "Generate My Delivery Snapshot"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <ul className="grid gap-3 md:grid-cols-2">
-                  {topics.map((topic) => (
-                    <li
-                      key={topic.id}
-                      className="rounded-xl border border-[#2a3357] bg-[#151a32] p-4"
-                    >
-                      <div className="font-semibold text-slate-100">{topic.name}</div>
-                      {topic.context && (
-                        <p className="mt-2 text-sm text-slate-300">{topic.context}</p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
             <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5">
               <h3 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
                 Section status
