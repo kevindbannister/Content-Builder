@@ -14,6 +14,8 @@ const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
   "contentos.contentTypes",
 ];
+const TOPIC_ARCHIVE_STORAGE_KEY = "contentos.topics.archive";
+
 const LOCAL_STORAGE_KEYS = [
   "contentos.session",
   "contentos.locks",
@@ -25,6 +27,7 @@ const LOCAL_STORAGE_KEYS = [
   "contentos.podcast",
   "contentos.social.design",
   "contentos.n8n",
+  TOPIC_ARCHIVE_STORAGE_KEY,
 ];
 
 const createDefaultBrand = () => ({
@@ -867,6 +870,84 @@ function TopicEditor({
   );
 }
 
+function ArchiveList({
+  archives,
+  onRestoreArchive,
+  onDeleteArchive,
+  activeArchiveId,
+}) {
+  return (
+    <section className="mt-12">
+      <header className="mb-3">
+        <h3 className="text-lg font-semibold text-slate-200">Archive</h3>
+        <p className="text-sm text-slate-400">
+          Revisit topics saved from previous sessions.
+        </p>
+      </header>
+      {!archives.length ? (
+        <p className="text-sm text-slate-400">
+          Archived topics will appear here after you start new sessions.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {archives.map((entry) => {
+            const primaryTopic = entry?.data?.topics?.[0];
+            const savedLabel = entry.savedAt
+              ? new Date(entry.savedAt).toLocaleString()
+              : null;
+            const isActive = entry.id === activeArchiveId;
+            return (
+              <li
+                key={entry.id}
+                className={`rounded-xl border border-[#232941] bg-[#121629] p-4 transition ${
+                  isActive ? "border-indigo-400/80" : "hover:border-[#2f3963]"
+                }`}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.2em] text-indigo-300/70">
+                      {entry.title || "Archived topic"}
+                    </p>
+                    {primaryTopic?.context && (
+                      <p className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">
+                        {primaryTopic.context}
+                      </p>
+                    )}
+                    <div className="mt-2 text-xs text-slate-400">
+                      {savedLabel && <span>Saved {savedLabel}</span>}
+                      {entry.startedAt && (
+                        <span className="block">
+                          Session started {new Date(entry.startedAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <button
+                      type="button"
+                      onClick={() => onRestoreArchive(entry.id)}
+                      className="rounded-lg bg-white px-4 py-1.5 text-sm font-semibold text-[#0b1020] transition hover:bg-slate-100"
+                    >
+                      Load session
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteArchive(entry.id)}
+                      className="rounded-lg border border-[#2a3357] px-4 py-1.5 text-sm font-semibold text-slate-200 transition hover:bg-[#1a2037]"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 // ----------------------
 // Page components
 // ----------------------
@@ -1260,6 +1341,10 @@ function TopicsPage({
   nextFromTopics,
   webhooks,
   ensureSessionId,
+  archives,
+  onRestoreArchive,
+  onDeleteArchive,
+  activeArchiveId,
 }) {
   const handleNext = async () => {
     const trimmedTopic = tempTopic.trim();
@@ -1308,6 +1393,11 @@ function TopicsPage({
     <section className="min-h-screen px-[7vw] py-16">
       <header className="mb-4">
         <h2 className="text-2xl font-semibold">Topics</h2>
+        {activeArchiveId && (
+          <p className="mt-1 text-sm text-amber-300">
+            Viewing an archived session. Any changes you make will update this archive entry automatically.
+          </p>
+        )}
       </header>
       <TopicEditor
         topics={topics}
@@ -1331,6 +1421,20 @@ function TopicsPage({
           {webhooks?.topicsContinue}
         </p>
       </div>
+      <ArchiveList
+        archives={archives}
+        onRestoreArchive={(id) => onRestoreArchive?.(id)}
+        onDeleteArchive={(id) => {
+          if (!onDeleteArchive) return;
+          const confirmed = window.confirm(
+            "Delete this archived session? This action cannot be undone."
+          );
+          if (confirmed) {
+            onDeleteArchive(id);
+          }
+        }}
+        activeArchiveId={activeArchiveId}
+      />
     </section>
   );
 }
@@ -2588,27 +2692,6 @@ function ContentOSApp() {
     id: "",
     startedAt: "",
   });
-  const startNewSession = () => {
-    const id = uuid();
-    const startedAt = new Date().toISOString();
-    setSession({ id, startedAt });
-    setLocks({ brand: false });
-    (async () => {
-      try {
-        const ok = await postWebhook(WEBHOOKS.startSession, "session_start", {
-          sessionId: id,
-          startedAt,
-        });
-        if (!ok) {
-          console.error("Session start webhook responded with non-200");
-        }
-      } catch (err) {
-        console.error("Session start webhook failed:", err);
-      }
-    })();
-    return id;
-  };
-  const ensureSessionId = () => session.id || startNewSession();
 
   const [locks, setLocks] = useLocal("contentos.locks", {
     brand: false,
@@ -2701,6 +2784,248 @@ function ContentOSApp() {
     newsletters: makeNewsletters(),
     questions: [],
   });
+
+  const [archives, setArchives] = useLocal(TOPIC_ARCHIVE_STORAGE_KEY, []);
+  const [activeArchiveId, setActiveArchiveId] = useState(null);
+  const archiveSyncRef = useRef(null);
+
+  const persistSessionToArchive = useCallback(
+    ({ entryId, dataOverride } = {}) => {
+      if (!session?.id) return null;
+      const archiveData =
+        dataOverride || {
+          brand,
+          contentPreferences,
+          topics,
+          snapshot,
+          snapshotChatMessages,
+          article,
+          podcast,
+          social,
+          refdata,
+          n8n,
+          locks,
+        };
+      const topicList = Array.isArray(archiveData.topics)
+        ? archiveData.topics
+        : [];
+      const hasTopic = topicList.some(
+        (topic) => typeof topic?.name === "string" && topic.name.trim().length
+      );
+      if (!hasTopic) return null;
+
+      const title = topicList[0]?.name?.trim() || "Untitled topic";
+      let createdEntry = null;
+      setArchives((prev) => {
+        const index = prev.findIndex((item) =>
+          entryId ? item.id === entryId : item.sessionId === session.id
+        );
+        const baseEntry = {
+          id:
+            entryId || (index >= 0 ? prev[index].id : uuid()),
+          sessionId: session.id,
+          startedAt: session.startedAt || "",
+          savedAt: new Date().toISOString(),
+          title,
+          data: archiveData,
+        };
+        if (index >= 0) {
+          const existing = prev[index];
+          const existingPayload = JSON.stringify(existing.data);
+          const nextPayload = JSON.stringify(archiveData);
+          if (existingPayload === nextPayload && existing.title === title) {
+            createdEntry = existing;
+            return prev;
+          }
+          const next = [...prev];
+          const updated = { ...existing, ...baseEntry };
+          next[index] = updated;
+          createdEntry = updated;
+          return next;
+        }
+        createdEntry = baseEntry;
+        return [baseEntry, ...prev];
+      });
+      return createdEntry;
+    },
+    [
+      session,
+      brand,
+      contentPreferences,
+      topics,
+      snapshot,
+      snapshotChatMessages,
+      article,
+      podcast,
+      social,
+      refdata,
+      n8n,
+      locks,
+      setArchives,
+    ]
+  );
+
+  const startNewSession = useCallback(() => {
+    persistSessionToArchive();
+    setActiveArchiveId(null);
+    archiveSyncRef.current = null;
+    const id = uuid();
+    const startedAt = new Date().toISOString();
+    setSession({ id, startedAt });
+    setLocks({ brand: false });
+    (async () => {
+      try {
+        const ok = await postWebhook(WEBHOOKS.startSession, "session_start", {
+          sessionId: id,
+          startedAt,
+        });
+        if (!ok) {
+          console.error("Session start webhook responded with non-200");
+        }
+      } catch (err) {
+        console.error("Session start webhook failed:", err);
+      }
+    })();
+    return id;
+  }, [persistSessionToArchive, setSession, setLocks]);
+
+  const ensureSessionId = useCallback(() => {
+    if (session.id) return session.id;
+    return startNewSession();
+  }, [session.id, startNewSession]);
+
+  const handleRestoreArchive = useCallback(
+    (entryId) => {
+      const entry = archives.find((item) => item.id === entryId);
+      if (!entry) return;
+      const data = entry.data || {};
+      setSession({
+        id: entry.sessionId,
+        startedAt: entry.startedAt || "",
+      });
+      setBrand(data.brand || createDefaultBrand());
+      setContentPreferences(
+        data.contentPreferences || createDefaultContentPreferences()
+      );
+      setTopics(data.topics || []);
+      setEditingTopicId(null);
+      setTempTopic("");
+      setTempContext("");
+      setSnapshot(data.snapshot || { text: "" });
+      setSnapshotChatMessages(data.snapshotChatMessages || []);
+      setArticle(
+        data.article || {
+          content: "",
+          savedAt: null,
+        }
+      );
+      setPodcast(
+        data.podcast || {
+          title: "",
+          outline: "",
+        }
+      );
+      setSocial(
+        data.social || {
+          shorts: makeShorts(),
+          polls: makePolls(),
+          quote: { text: "", author: "" },
+          carousels: makeCarousels(),
+          images: makeImages(),
+          newsletters: makeNewsletters(),
+          questions: [],
+        }
+      );
+      setRefdata(data.refdata || { headers: [], rows: [] });
+      setN8N(data.n8n || { webhook: "" });
+      setLocks(data.locks || { brand: false });
+      setSnapshotChatDraft("");
+      setSnapshotChatSending(false);
+      setHasUnsavedSettings(false);
+      setActiveArchiveId(entry.id);
+      archiveSyncRef.current = null;
+      setShowWelcome(false);
+    },
+    [
+      archives,
+      setSession,
+      setBrand,
+      setContentPreferences,
+      setTopics,
+      setEditingTopicId,
+      setTempTopic,
+      setTempContext,
+      setSnapshot,
+      setSnapshotChatMessages,
+      setArticle,
+      setPodcast,
+      setSocial,
+      setRefdata,
+      setN8N,
+      setLocks,
+      setSnapshotChatDraft,
+      setSnapshotChatSending,
+      setHasUnsavedSettings,
+      setShowWelcome,
+      makeShorts,
+      makePolls,
+      makeCarousels,
+      makeImages,
+      makeNewsletters,
+    ]
+  );
+
+  const handleDeleteArchive = useCallback(
+    (entryId) => {
+      setArchives((prev) => prev.filter((entry) => entry.id !== entryId));
+      if (activeArchiveId === entryId) {
+        setActiveArchiveId(null);
+        archiveSyncRef.current = null;
+      }
+    },
+    [setArchives, activeArchiveId]
+  );
+
+  useEffect(() => {
+    if (!activeArchiveId) return;
+    const entryExists = archives.some((entry) => entry.id === activeArchiveId);
+    if (!entryExists) return;
+    const archivePayload = {
+      brand,
+      contentPreferences,
+      topics,
+      snapshot,
+      snapshotChatMessages,
+      article,
+      podcast,
+      social,
+      refdata,
+      n8n,
+      locks,
+    };
+    const serialized = JSON.stringify(archivePayload);
+    if (archiveSyncRef.current === serialized) return;
+    archiveSyncRef.current = serialized;
+    persistSessionToArchive({
+      entryId: activeArchiveId,
+      dataOverride: archivePayload,
+    });
+  }, [
+    activeArchiveId,
+    archives,
+    brand,
+    contentPreferences,
+    topics,
+    snapshot,
+    snapshotChatMessages,
+    article,
+    podcast,
+    social,
+    refdata,
+    n8n,
+    locks,
+    persistSessionToArchive,
+  ]);
 
   // topic helpers
   const addTopic = (topic) => setTopics([topic]);
@@ -3171,6 +3496,10 @@ function ContentOSApp() {
             nextFromTopics={nextFromTopics}
             webhooks={WEBHOOKS}
             ensureSessionId={ensureSessionId}
+            archives={archives}
+            onRestoreArchive={handleRestoreArchive}
+            onDeleteArchive={handleDeleteArchive}
+            activeArchiveId={activeArchiveId}
           />
         )}
         {view === "snapshot" && (
