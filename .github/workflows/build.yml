@@ -1,0 +1,99 @@
+name: Build (Self-Hosted)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Detect package manager
+        id: pm
+        shell: bash
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "pm=pnpm" >> $GITHUB_OUTPUT
+          elif [ -f yarn.lock ]; then
+            echo "pm=yarn" >> $GITHUB_OUTPUT
+          else
+            echo "pm=npm" >> $GITHUB_OUTPUT
+          fi
+          echo "Detected package manager: $(cat $GITHUB_OUTPUT || echo ${{ steps.pm.outputs.pm }})"
+
+      # ---------- CACHES ----------
+      - name: Cache pnpm store
+        if: steps.pm.outputs.pm == 'pnpm'
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Cache npm
+        if: steps.pm.outputs.pm == 'npm'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Cache yarn
+        if: steps.pm.outputs.pm == 'yarn'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/yarn
+            **/.yarn/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      # ---------- MANAGER SETUP ----------
+      - name: Setup pnpm
+        if: steps.pm.outputs.pm == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Enable Corepack (yarn/pnpm)
+        if: steps.pm.outputs.pm != 'npm'
+        run: corepack enable
+
+      # ---------- INSTALL ----------
+      - name: Install (pnpm)
+        if: steps.pm.outputs.pm == 'pnpm'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install (yarn)
+        if: steps.pm.outputs.pm == 'yarn'
+        run: yarn install --frozen-lockfile
+
+      - name: Install (npm)
+        if: steps.pm.outputs.pm == 'npm'
+        run: npm ci
+
+      # ---------- BUILD ----------
+      - name: Build (pnpm)
+        if: steps.pm.outputs.pm == 'pnpm'
+        run: pnpm build
+
+      - name: Build (yarn)
+        if: steps.pm.outputs.pm == 'yarn'
+        run: yarn build
+
+      - name: Build (npm)
+        if: steps.pm.outputs.pm == 'npm'
+        run: npm run build
