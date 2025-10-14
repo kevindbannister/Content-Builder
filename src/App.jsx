@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.4";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.6";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -1830,6 +1830,9 @@ function ShortFormVideosPage({
   const [scriptsError, setScriptsError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState(null);
+  const [editingQuestionText, setEditingQuestionText] = useState("");
+  const [editingQuestionError, setEditingQuestionError] = useState("");
 
   const questions = social.questions ?? [];
   const shortsList = social.shorts ?? [];
@@ -1857,6 +1860,50 @@ function ShortFormVideosPage({
       setShowShorts(true);
     }
   }, [hasShortScripts]);
+
+  useEffect(() => {
+    if (editingQuestionIndex == null) return;
+    if (!questions[editingQuestionIndex]) {
+      setEditingQuestionIndex(null);
+      setEditingQuestionText("");
+      setEditingQuestionError("");
+    }
+  }, [editingQuestionIndex, questions]);
+
+  const startEditingQuestion = (index) => {
+    const target = questions[index];
+    if (!target) return;
+    setEditingQuestionIndex(index);
+    setEditingQuestionText(target.text ?? "");
+    setEditingQuestionError("");
+  };
+
+  const cancelEditingQuestion = () => {
+    setEditingQuestionIndex(null);
+    setEditingQuestionText("");
+    setEditingQuestionError("");
+  };
+
+  const saveEditedQuestion = () => {
+    if (editingQuestionIndex == null) return;
+    const trimmed = editingQuestionText.trim();
+    if (!trimmed) {
+      setEditingQuestionError("Question cannot be empty.");
+      return;
+    }
+    setSocial((prev) => {
+      const existing = [...(prev.questions ?? [])];
+      if (!existing[editingQuestionIndex]) return prev;
+      existing[editingQuestionIndex] = {
+        ...existing[editingQuestionIndex],
+        text: trimmed,
+      };
+      return { ...prev, questions: existing };
+    });
+    setEditingQuestionIndex(null);
+    setEditingQuestionText("");
+    setEditingQuestionError("");
+  };
 
   const updateQuestionStatus = (index, nextStatus) => {
     const target = questions[index];
@@ -2146,9 +2193,56 @@ function ShortFormVideosPage({
                 <li key={q?.id ?? idx} className={`${baseClasses} ${statusClasses}`}>
                   {q ? (
                     <>
-                      <p className="font-medium text-sm leading-relaxed">
-                        {q.text}
-                      </p>
+                      {editingQuestionIndex === idx ? (
+                        <div className="space-y-3">
+                          <label className="block text-xs uppercase tracking-wide text-slate-400">
+                            Edit question
+                            <textarea
+                              value={editingQuestionText}
+                              onChange={(event) => {
+                                setEditingQuestionText(event.target.value);
+                                if (editingQuestionError) {
+                                  setEditingQuestionError("");
+                                }
+                              }}
+                              rows={3}
+                              className="mt-1 w-full bg-[#0f1427] border border-[#232941] rounded-xl p-2 text-sm"
+                            />
+                          </label>
+                          {editingQuestionError && (
+                            <p className="text-xs text-rose-400">{editingQuestionError}</p>
+                          )}
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            <button
+                              type="button"
+                              onClick={saveEditedQuestion}
+                              className="bg-white text-[#0b1020] font-semibold px-3 py-1.5 rounded-lg"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditingQuestion}
+                              className="border border-[#2a3357] px-3 py-1.5 rounded-lg"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="font-medium text-sm leading-relaxed">
+                            {q.text}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => startEditingQuestion(idx)}
+                            className="text-xs border border-[#2a3357] px-2 py-1 rounded-lg text-slate-300 hover:bg-[#1a2037]"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
                       <div className="mt-3 flex flex-wrap gap-4 text-xs">
                         <label className="inline-flex items-center gap-2 cursor-pointer">
                           <input
@@ -2603,8 +2697,14 @@ function ContentOSApp() {
     brand: false,
   });
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showNewBuildConfirm, setShowNewBuildConfirm] = useState(false);
+  const skipNextWelcomeRef = useRef(false);
   useEffect(() => {
     if (!session.id) {
+      if (skipNextWelcomeRef.current) {
+        skipNextWelcomeRef.current = false;
+        return;
+      }
       setShowWelcome(true);
     }
   }, [session.id]);
@@ -3186,23 +3286,10 @@ function ContentOSApp() {
   };
 
   // reset
-  const resetSession = () => {
-    persistSessionToArchive();
-    setActiveArchiveId(null);
-    archiveSyncRef.current = null;
-    if (view === "settings" && hasUnsavedSettings) {
-      const allow = window.confirm(
-        "You have unsaved settings. Leave without saving?"
-      );
-      if (!allow) return false;
-      setHasUnsavedSettings(false);
+  const resetSession = ({ showWelcomeOverlay = true } = {}) => {
+    if (!showWelcomeOverlay) {
+      skipNextWelcomeRef.current = true;
     }
-    if (
-      !window.confirm(
-        "Reset session? This clears topics, snapshot, article, social, locks, refdata, and webhook settings. Your saved settings remain until you reset them from the Settings page."
-      )
-    )
-      return false;
     try {
       const toDelete = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -3242,8 +3329,19 @@ function ContentOSApp() {
       window.location.hash = "topics";
     } catch {}
     setHasUnsavedSettings(false);
-    setShowWelcome(true);
+    setShowWelcome(showWelcomeOverlay);
     return true;
+  };
+
+  const requestNewSession = () => {
+    if (view === "settings" && hasUnsavedSettings) {
+      const allow = window.confirm(
+        "You have unsaved settings. Leave without saving?"
+      );
+      if (!allow) return;
+      setHasUnsavedSettings(false);
+    }
+    setShowNewBuildConfirm(true);
   };
 
   const flow = FLOW_ORDER;
@@ -3359,7 +3457,7 @@ function ContentOSApp() {
               Settings
             </button>
             <button
-              onClick={resetSession}
+              onClick={requestNewSession}
               className="px-3 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
             >
               New
@@ -3587,6 +3685,46 @@ CTA: Save this and start.`,
                   className="order-1 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#0b1020] transition hover:bg-slate-100 sm:order-2"
                 >
                   Start new build
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showNewBuildConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#06091a]/70 backdrop-blur-sm">
+            <div className="max-w-xl w-full space-y-4 rounded-3xl border border-[#232941] bg-[#121629] p-6 shadow-2xl">
+              <header className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.25em] text-indigo-300/80">
+                  ContentOS
+                </p>
+                <h2 className="text-2xl font-semibold">Start a new build?</h2>
+                <p className="text-sm text-slate-300">
+                  This clears your current topics, delivery snapshot, content drafts, and integrations so you can begin fresh with new content. Are you sure you want to continue?
+                </p>
+              </header>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowNewBuildConfirm(false)}
+                  className="order-2 rounded-xl border border-[#2a3357] px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-[#151a32] sm:order-1"
+                >
+                  Keep current session
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const didReset = resetSession({
+                      showWelcomeOverlay: false,
+                    });
+                    if (!didReset) return;
+                    startNewSession();
+                    setShowNewBuildConfirm(false);
+                    setSidebarOpen(false);
+                    navTo("topics");
+                  }}
+                  className="order-1 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#0b1020] transition hover:bg-slate-100 sm:order-2"
+                >
+                  Yes, start fresh
                 </button>
               </div>
             </div>
