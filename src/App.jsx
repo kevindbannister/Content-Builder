@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.8";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.9";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -1844,45 +1844,114 @@ function SnapshotPage({
         </div>
       </header>
       <div className="flex flex-col gap-6 lg:flex-row">
-        <aside className="print-hidden lg:w-64 lg:flex-shrink-0">
-          <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 lg:sticky lg:top-24">
-            <h3 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
-              Section status
-            </h3>
-            <ol className="mt-4 space-y-4">
-              {sectionsWithMeta.map((section) => {
-                const complete = section.isComplete;
-                const over = section.overLimit;
-                return (
-                  <li key={section.id} className="flex items-start gap-3">
-                    <span
-                      className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold ${
-                        complete
-                          ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-200"
-                          : over
-                          ? "border-rose-500/40 bg-rose-500/20 text-rose-200"
-                          : "border-[#2a3357] bg-[#0f1427] text-slate-300"
-                      }`}
-                    >
-                      {complete ? "✓" : over ? "!" : "•"}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-100">
-                        {section.definition.title}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {complete
-                          ? "Ready"
-                          : over
-                          ? "Trim to meet the target"
-                          : "Needs input"}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-            <p className="mt-6 text-xs text-slate-400">{statusMessage}</p>
+        <aside className="print-hidden lg:w-80 lg:flex-shrink-0">
+          <div className="flex flex-col gap-5 lg:sticky lg:top-24">
+            <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
+                Section status
+              </h3>
+              <ol className="mt-4 space-y-4">
+                {sectionsWithMeta.map((section) => {
+                  const complete = section.isComplete;
+                  const over = section.overLimit;
+                  return (
+                    <li key={section.id} className="flex items-start gap-3">
+                      <span
+                        className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold ${
+                          complete
+                            ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-200"
+                            : over
+                            ? "border-rose-500/40 bg-rose-500/20 text-rose-200"
+                            : "border-[#2a3357] bg-[#0f1427] text-slate-300"
+                        }`}
+                      >
+                        {complete ? "✓" : over ? "!" : "•"}
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-100">
+                          {section.definition.title}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {complete
+                            ? "Ready"
+                            : over
+                            ? "Trim to meet the target"
+                            : "Needs input"}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+              <p className="mt-6 text-xs text-slate-400">{statusMessage}</p>
+            </div>
+            <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-100">
+                Request changes to this snapshot
+              </h3>
+              <p className="text-xs text-slate-400">
+                Start a chat with the editing team. Each message is sent to the webhook
+                below and replies appear here automatically.
+              </p>
+              <div
+                ref={chatContainerRef}
+                className="mt-4 flex h-64 flex-col gap-3 overflow-y-auto rounded-2xl border border-[#2a3357] bg-[#0a0f22] p-3"
+              >
+                {snapshotChatMessages.length ? (
+                  snapshotChatMessages.map((message) => {
+                    const role = message.role || "assistant";
+                    const alignment = role === "user" ? "items-end" : "items-start";
+                    let bubbleClasses =
+                      "bg-[#121629] border border-[#2a3357] text-slate-200";
+                    if (role === "user") {
+                      bubbleClasses = "bg-[#222845] text-slate-100";
+                    } else if (role === "system") {
+                      bubbleClasses =
+                        "bg-[#2f1f2f] border border-[#533553] text-rose-100";
+                    }
+                    return (
+                      <div
+                        key={message.id || message.timestamp}
+                        className={`flex ${alignment}`}
+                      >
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${bubbleClasses}`}
+                        >
+                          {message.text}
+                        </div>
+                        <span className="sr-only">{message.timestamp}</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-10 text-center text-xs text-slate-400">
+                    No messages yet. Send a request to get started.
+                  </div>
+                )}
+              </div>
+              <div className="mt-3">
+                <textarea
+                  value={snapshotChatDraft}
+                  onChange={(event) => setSnapshotChatDraft(event.target.value)}
+                  onKeyDown={handleSnapshotChatKeyDown}
+                  rows={3}
+                  placeholder="Type your change request… Press Enter to send, or Shift + Enter for a new line."
+                  className="w-full rounded-xl border border-[#232941] bg-[#0f1427] p-3 text-sm"
+                />
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="break-all text-xs text-slate-400 sm:pr-3">
+                  {webhooks?.snapshotChange}
+                </p>
+                <button
+                  onClick={sendSnapshotChat}
+                  disabled={snapshotChatSending}
+                  className="rounded-xl bg-white px-4 py-2 font-bold text-[#0b1020] transition disabled:opacity-60"
+                >
+                  {snapshotChatSending ? "Sending…" : "Send message"}
+                </button>
+              </div>
+            </div>
           </div>
         </aside>
         <div className="flex-1 space-y-6">
@@ -2081,73 +2150,6 @@ function SnapshotPage({
               />
             </div>
           ) : null}
-          <div className="print-hidden rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-100">
-              Request changes to this snapshot
-            </h3>
-            <p className="text-xs text-slate-400">
-              Start a chat with the editing team. Each message is sent to the webhook
-              below and replies appear here automatically.
-            </p>
-            <div
-              ref={chatContainerRef}
-              className="mt-4 flex h-64 flex-col gap-3 overflow-y-auto rounded-2xl border border-[#2a3357] bg-[#0a0f22] p-3"
-            >
-              {snapshotChatMessages.length ? (
-                snapshotChatMessages.map((message) => {
-                  const role = message.role || "assistant";
-                  const alignment = role === "user" ? "items-end" : "items-start";
-                  let bubbleClasses =
-                    "bg-[#121629] border border-[#2a3357] text-slate-200";
-                  if (role === "user") {
-                    bubbleClasses = "bg-[#222845] text-slate-100";
-                  } else if (role === "system") {
-                    bubbleClasses =
-                      "bg-[#2f1f2f] border border-[#533553] text-rose-100";
-                  }
-                  return (
-                    <div
-                      key={message.id || message.timestamp}
-                      className={`flex ${alignment}`}
-                    >
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${bubbleClasses}`}
-                      >
-                        {message.text}
-                      </div>
-                      <span className="sr-only">{message.timestamp}</span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="py-10 text-center text-xs text-slate-400">
-                  No messages yet. Send a request to get started.
-                </div>
-              )}
-            </div>
-            <div className="mt-3">
-              <textarea
-                value={snapshotChatDraft}
-                onChange={(event) => setSnapshotChatDraft(event.target.value)}
-                onKeyDown={handleSnapshotChatKeyDown}
-                rows={3}
-                placeholder="Type your change request… Press Enter to send, or Shift + Enter for a new line."
-                className="w-full rounded-xl border border-[#232941] bg-[#0f1427] p-3 text-sm"
-              />
-            </div>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="break-all text-xs text-slate-400 sm:pr-3">
-                {webhooks?.snapshotChange}
-              </p>
-              <button
-                onClick={sendSnapshotChat}
-                disabled={snapshotChatSending}
-                className="rounded-xl bg-white px-4 py-2 font-bold text-[#0b1020] transition disabled:opacity-60"
-              >
-                {snapshotChatSending ? "Sending…" : "Send message"}
-              </button>
-            </div>
-          </div>
           <div className="print-hidden mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-slate-400">{statusMessage}</p>
             <button
@@ -2160,7 +2162,7 @@ function SnapshotPage({
           </div>
         </div>
       </div>
-      <div className="snapshot-print-only">
+      <div className="snapshot-print-only hidden print:block">
         <h1 className="snapshot-print-title">Delivery Snapshot</h1>
         <p className="snapshot-print-meta">Prepared {formattedPrintDate}</p>
         <div className="snapshot-print-sections">
