@@ -94,7 +94,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     title: "Problem",
     helper: "State the cost of inaction in one sentence.",
     placeholder: "e.g., \"Each launch loses 40% of warm leads before demo day.\"",
-    maxChars: 280,
+    maxWords: 280,
     required: true,
   },
   {
@@ -103,7 +103,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     helper: "Name the framework or method you’ll use to solve it.",
     placeholder:
       "e.g., \"The Launch Lift Framework rebuilds pre-demo nurture in 14 days.\"",
-    maxChars: 260,
+    maxWords: 280,
     required: true,
   },
   {
@@ -112,16 +112,16 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     helper: "Offer a vivid comparison that makes the model stick.",
     placeholder:
       "e.g., \"It’s like upgrading from a paper map to Waze for your buyer journey.\"",
-    maxChars: 180,
+    maxWords: 280,
     required: true,
   },
   {
     id: "caseStat",
-    title: "Case / Stat",
+    title: "Case Study / Statistics",
     helper: "Share one proof point—metric, testimonial, or mini-case.",
     placeholder:
       "e.g., \"After the shift, demos jumped 37% and close rates doubled in Q2.\"",
-    maxChars: 220,
+    maxWords: 280,
     required: true,
   },
   {
@@ -130,7 +130,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     helper: "List 2–3 specific moves the audience can take next.",
     placeholder:
       "e.g., \"1. Audit handoff → 2. Patch nurture gaps → 3. Relaunch with live demo.\"",
-    maxChars: 260,
+    maxWords: 280,
     required: true,
   },
   {
@@ -139,7 +139,7 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     helper: "Draft the hook and where you’ll use it.",
     placeholder:
       "e.g., \"Stop losing launch leads—drop this in the first slide of your sales deck.\"",
-    maxChars: 120,
+    maxWords: 280,
     required: true,
   },
 ];
@@ -1628,7 +1628,7 @@ function SnapshotPage({
           title: section.id,
           helper: "",
           placeholder: "",
-          maxChars: null,
+          maxWords: null,
           required: false,
         };
       const content = typeof section.content === "string" ? section.content : "";
@@ -1641,11 +1641,11 @@ function SnapshotPage({
             .filter(Boolean)
         : [];
       const wordCount = words.length;
-      const limit =
-        typeof definition.maxChars === "number" ? definition.maxChars : null;
-      const overLimit = limit != null ? charCount > limit : false;
+      const wordLimit =
+        typeof definition.maxWords === "number" ? definition.maxWords : null;
+      const overLimit = wordLimit != null ? wordCount > wordLimit : false;
       const nearLimit =
-        limit != null ? charCount > limit * 0.9 && !overLimit : false;
+        wordLimit != null ? wordCount > wordLimit * 0.9 && !overLimit : false;
       const isComplete = trimmed.length > 0 && !overLimit;
       return {
         ...section,
@@ -1654,12 +1654,20 @@ function SnapshotPage({
         trimmed,
         charCount,
         wordCount,
-        limit,
+        wordLimit,
         overLimit,
         nearLimit,
         isComplete,
       };
-    });
+    })
+      .filter((section) => {
+        const id = typeof section.id === "string" ? section.id.toLowerCase() : "";
+        const title =
+          typeof section.definition.title === "string"
+            ? section.definition.title.toLowerCase()
+            : "";
+        return id !== "statement" && title !== "statement";
+      });
   }, [snapshot.sections]);
 
   const allRequiredComplete = useMemo(
@@ -2007,7 +2015,7 @@ function SnapshotPage({
           <div className="space-y-4">
             {sectionsWithMeta.map((section) => {
               const definition = section.definition;
-              const limit = section.limit;
+              const wordLimit = section.wordLimit;
               let badgeTone =
                 "border-[#2a3357] bg-[#0f1427] text-slate-200";
               if (section.overLimit) {
@@ -2050,13 +2058,13 @@ function SnapshotPage({
                             </p>
                           )}
                         </div>
-                        <span
-                          className={`mt-1 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeTone}`}
-                        >
-                          {limit != null
-                            ? `${section.charCount}/${limit} chars`
-                            : `${section.charCount} chars`}
-                        </span>
+                      <span
+                        className={`mt-1 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeTone}`}
+                      >
+                        {wordLimit != null
+                          ? `${section.wordCount}/${wordLimit} words`
+                          : `${section.wordCount} words`}
+                      </span>
                       </div>
                       <textarea
                         value={section.content}
@@ -2071,7 +2079,7 @@ function SnapshotPage({
                         <span>
                           {section.wordCount} {section.wordCount === 1 ? "word" : "words"}
                         </span>
-                        {limit != null && <span>Target ≤ {limit} chars</span>}
+                        {wordLimit != null && <span>Target ≤ {wordLimit} words</span>}
                         {section.overLimit ? (
                           <span className="text-rose-300">
                             Over target — trim this section.
