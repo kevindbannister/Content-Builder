@@ -19,7 +19,7 @@ Commit the regenerated `docs/` folder and ensure GitHub Pages is configured to d
 
 ## Versioning & automatic refresh
 
-- App version: **1.9.11** (also shown in the UI header next to the **New** button).
+- App version: **1.9.20** (also shown in the UI header next to the **New** button).
 - Bump the version in `package.json` for each release. The build injects that version into the client bundle so GitHub Pages loads the newest assets and clears any cached local data automatically.
 - When the deployed version changes, any previously stored `contentos.*` data in `localStorage` is removed so you always start from a clean slate on the preview site.
 
