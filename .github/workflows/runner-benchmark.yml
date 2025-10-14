@@ -1,0 +1,88 @@
+name: Runner Benchmark
+on: workflow_dispatch
+
+jobs:
+  bench:
+    name: Bench on ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, self-hosted] # change labels to match your runner
+    steps:
+      - name: Queue time (created_at → run_started_at)
+        id: q
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+            const created = new Date(run.data.created_at);
+            const started = new Date(run.data.run_started_at);
+            core.setOutput('queue_ms', started - created);
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: CPU (openssl sha256 for 5s)
+        run: |
+          /usr/bin/time -p sh -c "openssl speed -elapsed -seconds 5 sha256" 2>cpu.time || true
+
+      - name: Disk write/read (512MB)
+        run: |
+          /usr/bin/time -p dd if=/dev/zero of=bench.bin bs=1M count=512 status=none 2>dd.write.time
+          /usr/bin/time -p dd if=bench.bin of=/dev/null bs=1M status=none 2>dd.read.time
+          rm -f bench.bin
+
+      - name: Network download (100MB)
+        run: |
+          /usr/bin/time -p curl -L -o /dev/null https://speed.hetzner.de/100MB.bin 2>net.time
+
+      - name: Node setup + cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: |
+          /usr/bin/time -p npm ci 2>npm.ci.time || true
+
+      - name: Build
+        run: |
+          /usr/bin/time -p npm run build --if-present 2>npm.build.time || true
+
+      - name: Test
+        run: |
+          /usr/bin/time -p npm test --if-present 2>npm.test.time || true
+
+      - name: Summarise timings
+        id: sum
+        run: |
+          parse() { awk '/^real /{print $2}' "$1" 2>/dev/null || echo ""; }
+          cat <<EOF > summary.json
+          {
+            "runner_label": "${{ matrix.runner }}",
+            "runner_name": "${{ runner.name }}",
+            "os": "${{ runner.os }}",
+            "queue_ms": "${{ steps.q.outputs.queue_ms }}",
+            "cpu_sha256_s": "$(parse cpu.time)",
+            "disk_write_s": "$(parse dd.write.time)",
+            "disk_read_s": "$(parse dd.read.time)",
+            "net_download_100mb_s": "$(parse net.time)",
+            "npm_ci_s": "$(parse npm.ci.time)",
+            "build_s": "$(parse npm.build.time)",
+            "test_s": "$(parse npm.test.time)"
+          }
+          EOF
+          echo "## Runner: ${{ matrix.runner }}" >> $GITHUB_STEP_SUMMARY
+          jq -r 'to_entries|map("| \(.key) | \(.value) |")|["| metric | value |","|---|---|"]+.|.[]' summary.json >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload JSON artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.runner }}
+          path: summary.json
