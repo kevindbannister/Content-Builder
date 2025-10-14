@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.11";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.15";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -1880,6 +1880,55 @@ function SnapshotPage({
                 })}
               </ol>
               <p className="mt-6 text-xs text-slate-400">{statusMessage}</p>
+              {!!topics.length && (
+                <div className="mt-6 border-t border-[#232941] pt-6">
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                        Selected topics
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        These inform tone, proof points, and context.
+                      </p>
+                    </div>
+                    <div className="print-hidden flex flex-col items-stretch gap-2 sm:items-end">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => navTo("topics")}
+                          className="rounded-lg border border-[#2a3357] px-3 py-1 text-xs font-semibold text-slate-100 transition hover:bg-[#151a32]"
+                        >
+                          Change Topic
+                        </button>
+                        <button
+                          type="button"
+                          onClick={requestSnapshot}
+                          disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
+                          className="rounded-xl border border-[#2a3357] bg-[#222845] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {generatingSnapshot ? "Requesting…" : "Generate My Delivery Snapshot"}
+                        </button>
+                      </div>
+                      <p className="break-all text-xs italic text-slate-400 sm:text-right">
+                        {webhooks?.snapshotGenerate}
+                      </p>
+                    </div>
+                    <ul className="grid gap-3 md:grid-cols-2">
+                      {topics.map((topic) => (
+                        <li
+                          key={topic.id}
+                          className="rounded-xl border border-[#2a3357] bg-[#151a32] p-4"
+                        >
+                          <div className="font-semibold text-slate-100">{topic.name}</div>
+                          {topic.context && (
+                            <p className="mt-2 text-sm text-slate-300">{topic.context}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
               <h3 className="text-lg font-semibold text-slate-100">
@@ -1951,55 +2000,6 @@ function SnapshotPage({
           </div>
         </aside>
         <div className="flex-1 space-y-6">
-          {!!topics.length && (
-            <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
-              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-                    Selected topics
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    These inform tone, proof points, and context.
-                  </p>
-                </div>
-                <div className="print-hidden flex flex-col items-stretch gap-2 sm:items-end">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => navTo("topics")}
-                      className="rounded-lg border border-[#2a3357] px-3 py-1 text-xs font-semibold text-slate-100 transition hover:bg-[#151a32]"
-                    >
-                      Change Topic
-                    </button>
-                    <button
-                      type="button"
-                      onClick={requestSnapshot}
-                      disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
-                      className="rounded-xl border border-[#2a3357] bg-[#222845] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {generatingSnapshot ? "Requesting…" : "Generate My Delivery Snapshot"}
-                    </button>
-                  </div>
-                  <p className="break-all text-xs italic text-slate-400 sm:text-right">
-                    {webhooks?.snapshotGenerate}
-                  </p>
-                </div>
-              </div>
-              <ul className="grid gap-3 md:grid-cols-2">
-                {topics.map((topic) => (
-                  <li
-                    key={topic.id}
-                    className="rounded-xl border border-[#2a3357] bg-[#151a32] p-4"
-                  >
-                    <div className="font-semibold text-slate-100">{topic.name}</div>
-                    {topic.context && (
-                      <p className="mt-2 text-sm text-slate-300">{topic.context}</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
           <div className="space-y-4">
             {sectionsWithMeta.map((section) => {
               const definition = section.definition;
