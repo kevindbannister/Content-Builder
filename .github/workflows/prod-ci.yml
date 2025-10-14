@@ -1,0 +1,51 @@
+name: CI (PR/Main)
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest   # keep cloud for reproducible CI (or change to self-hosted)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      # Reproducible installs for CI
+      - name: Install (locked/reproducible)
+        run: |
+          if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm install --frozen-lockfile; \
+          elif [ -f yarn.lock ]; then corepack enable yarn && yarn install --frozen-lockfile; \
+          elif [ -f package-lock.json ]; then npm ci; \
+          else npm install --no-audit --no-fund; fi
+
+      - name: Lint
+        run: |
+          if [ -f package.json ] && jq -e '.scripts.lint' package.json >/dev/null; then
+            if [ -f pnpm-lock.yaml ] ; then pnpm lint; \
+            elif [ -f yarn.lock ]   ; then yarn lint; \
+            else npm run lint; fi
+          else
+            echo "No lint script, skipping."
+          fi
+
+      - name: Test
+        run: |
+          if [ -f package.json ] && jq -e '.scripts.test' package.json >/dev/null; then
+            if [ -f pnpm-lock.yaml ] ; then pnpm test -- --ci; \
+            elif [ -f yarn.lock ]   ; then yarn test --ci; \
+            else npm test -- --ci; fi
+          else
+            echo "No test script, skipping."
+          fi
+
+      - name: Build
+        run: |
+          if [ -f pnpm-lock.yaml ] ; then pnpm build; \
+          elif [ -f yarn.lock ]   ; then yarn build; \
+          else npm run build; fi
