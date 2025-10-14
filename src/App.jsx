@@ -2114,6 +2114,52 @@ function SnapshotPage({
       <div className="flex flex-col gap-6 lg:flex-row">
         <aside className="print-hidden lg:w-80 lg:flex-shrink-0">
           <div className="flex flex-col gap-5 lg:sticky lg:top-24">
+            {!!topics.length && (
+              <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
+                      Selected topics
+                    </h4>
+                    <p className="mt-1 text-xs text-slate-400">
+                      These inform tone, proof points, and context.
+                    </p>
+                  </div>
+                  <div className="print-hidden flex flex-col items-stretch gap-2 sm:items-end">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => navTo("topics")}
+                        className="rounded-lg border border-[#2a3357] px-3 py-1 text-xs font-semibold text-slate-100 transition hover:bg-[#151a32]"
+                      >
+                        Change Topic
+                      </button>
+                      <button
+                        type="button"
+                        onClick={requestSnapshot}
+                        disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
+                        className="rounded-xl border border-[#2a3357] bg-[#222845] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {generatingSnapshot ? "Requesting…" : "Generate My Delivery Snapshot"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <ul className="grid gap-3 md:grid-cols-2">
+                  {topics.map((topic) => (
+                    <li
+                      key={topic.id}
+                      className="rounded-xl border border-[#2a3357] bg-[#151a32] p-4"
+                    >
+                      <div className="font-semibold text-slate-100">{topic.name}</div>
+                      {topic.context && (
+                        <p className="mt-2 text-sm text-slate-300">{topic.context}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5">
               <h3 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
                 Section status
@@ -2152,55 +2198,6 @@ function SnapshotPage({
                 })}
               </ol>
               <p className="mt-6 text-xs text-slate-400">{statusMessage}</p>
-              {!!topics.length && (
-                <div className="mt-6 rounded-2xl border border-[#2a3357] bg-[#151a32] p-4 shadow-sm">
-                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-                        Selected topics
-                      </h4>
-                      <p className="text-xs text-slate-400">
-                        These inform tone, proof points, and context.
-                      </p>
-                    </div>
-                    <div className="print-hidden flex flex-col items-stretch gap-2 sm:items-end">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                        <button
-                          type="button"
-                          onClick={() => navTo("topics")}
-                          className="rounded-lg border border-[#2a3357] px-3 py-1 text-xs font-semibold text-slate-100 transition hover:bg-[#151a32]"
-                        >
-                          Change Topic
-                        </button>
-                        <button
-                          type="button"
-                          onClick={requestSnapshot}
-                          disabled={generatingSnapshot || !webhooks?.snapshotGenerate}
-                          className="rounded-xl border border-[#2a3357] bg-[#222845] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {generatingSnapshot ? "Requesting…" : "Generate My Delivery Snapshot"}
-                        </button>
-                      </div>
-                      <p className="break-all text-xs italic text-slate-400 sm:text-right">
-                        {webhooks?.snapshotGenerate}
-                      </p>
-                    </div>
-                  </div>
-                  <ul className="grid gap-3 md:grid-cols-2">
-                    {topics.map((topic) => (
-                      <li
-                        key={topic.id}
-                        className="rounded-xl border border-[#2a3357] bg-[#151a32] p-4"
-                      >
-                        <div className="font-semibold text-slate-100">{topic.name}</div>
-                        {topic.context && (
-                          <p className="mt-2 text-sm text-slate-300">{topic.context}</p>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           </div>
         </aside>
@@ -2231,36 +2228,36 @@ function SnapshotPage({
                   onDragOver={handleDragOver}
                   onDrop={(event) => handleDrop(event, section.id)}
                 >
-                  <div className="flex items-start gap-3">
-                    <button
-                      type="button"
-                      className="print-hidden mt-1 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#2a3357] bg-[#0f1427] text-slate-300 transition hover:bg-[#151a32]"
-                      draggable
-                      onDragStart={(event) => handleDragStart(event, section.id)}
-                      onDragEnd={handleDragEnd}
-                      aria-label={`Reorder ${definition.title}`}
-                      title="Drag to reorder"
-                    >
-                      <Icon.List className="h-4 w-4" />
-                    </button>
+                  <div className="flex items-start gap-4">
+                    {(() => {
+                      const DisplayIcon = SectionIcon ?? Icon.Image;
+                      if (!DisplayIcon) {
+                        return null;
+                      }
+                      return (
+                        <span
+                          className="mt-1 inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-[#2a3357] bg-[#0f1427] text-slate-200 transition hover:bg-[#151a32]"
+                          draggable
+                          onDragStart={(event) => handleDragStart(event, section.id)}
+                          onDragEnd={handleDragEnd}
+                          aria-label={`Reorder ${definition.title}`}
+                          title="Drag to reorder"
+                        >
+                          <DisplayIcon className="h-7 w-7" style={{ color: ICON_COLOR }} />
+                        </span>
+                      );
+                    })()}
                     <div className="flex-1">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex items-start gap-3">
-                          {SectionIcon ? (
-                            <span className="mt-1 inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-[#2a3357] bg-[#0f1427]">
-                              <SectionIcon className="h-6 w-6" style={{ color: ICON_COLOR }} />
-                            </span>
-                          ) : null}
-                          <div>
-                            <h3 className="text-xl font-bold text-slate-50">
-                              {definition.title}
-                            </h3>
-                            {definition.helper && (
-                              <p className="text-sm text-slate-400">
-                                {definition.helper}
-                              </p>
-                            )}
-                          </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-slate-50">
+                            {definition.title}
+                          </h3>
+                          {definition.helper && (
+                            <p className="text-sm text-slate-400">
+                              {definition.helper}
+                            </p>
+                          )}
                         </div>
                         <span
                           className={`mt-1 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeTone}`}
@@ -2335,48 +2332,6 @@ function SnapshotPage({
                 </div>
               );
             })}
-          </div>
-          <div className="snapshot-preview-card rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-100">
-              Snapshot Preview
-            </h3>
-            <p className="text-sm text-slate-300">
-              Review how the narrative reads before exporting or printing.
-            </p>
-            <div className="mt-4 space-y-4">
-              {previewSections.map((section) => {
-                const SectionIcon = SNAPSHOT_SECTION_ICONS[section.definition.id];
-                return (
-                  <div
-                    key={section.id}
-                    className="snapshot-print-card rounded-xl border border-[#2a3357] bg-[#0f1427] p-4"
-                  >
-                    <div className="flex items-start gap-3">
-                      {SectionIcon ? (
-                        <span className="mt-0.5 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-[#2a3357] bg-[#101529]">
-                          <SectionIcon className="h-5 w-5" style={{ color: ICON_COLOR }} />
-                        </span>
-                      ) : null}
-                      <h4 className="text-base font-semibold text-slate-100">
-                        {section.definition.title}
-                      </h4>
-                    </div>
-                    {section.trimmed ? (
-                      <div
-                        className="mt-2 text-sm leading-relaxed text-slate-200"
-                        dangerouslySetInnerHTML={{
-                          __html: ensureHtmlContent(section.content),
-                        }}
-                      />
-                    ) : (
-                      <p className="mt-2 text-xs italic text-slate-500">
-                        Not filled yet.
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
           </div>
           {snapshot.aiDraft ? (
             <div className="snapshot-preview-card rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
