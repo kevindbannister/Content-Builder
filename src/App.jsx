@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.11";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.20";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
