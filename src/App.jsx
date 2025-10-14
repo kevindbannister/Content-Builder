@@ -1,7 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.2";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.3";
 const VERSION_STORAGE_KEY = "contentos.version";
 const LOCAL_STORAGE_KEYS = [
   "contentos.session",
@@ -468,6 +475,159 @@ const Icon = {
 // Small UI helpers
 // ----------------------
 function Stepper({ current, steps }) {
+  const containerRef = useRef(null);
+  const fullMeasureRefs = useRef([]);
+  const dotMeasureRef = useRef(null);
+  const dotLastMeasureRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [measurements, setMeasurements] = useState({
+    fullWidths: [],
+    dotWithConnector: 0,
+    dotWithoutConnector: 0,
+  });
+  const [displayModes, setDisplayModes] = useState(() =>
+    steps.map(() => "full")
+  );
+
+  useEffect(() => {
+    setDisplayModes((prev) => {
+      if (prev.length === steps.length) return prev;
+      return steps.map(() => "full");
+    });
+  }, [steps]);
+
+  const measure = useCallback(() => {
+    const nextFull = steps.map(
+      (_, index) => fullMeasureRefs.current[index]?.offsetWidth ?? 0
+    );
+    const nextDotWith = dotMeasureRef.current?.offsetWidth ?? 0;
+    const nextDotWithout = dotLastMeasureRef.current?.offsetWidth ?? 0;
+    setMeasurements((prev) => {
+      const sameFull =
+        prev.fullWidths.length === nextFull.length &&
+        prev.fullWidths.every((value, idx) => value === nextFull[idx]);
+      if (
+        sameFull &&
+        prev.dotWithConnector === nextDotWith &&
+        prev.dotWithoutConnector === nextDotWithout
+      ) {
+        return prev;
+      }
+      return {
+        fullWidths: nextFull,
+        dotWithConnector: nextDotWith,
+        dotWithoutConnector: nextDotWithout,
+      };
+    });
+  }, [steps]);
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    measure();
+  }, [measure]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handle = () => {
+      measure();
+    };
+    window.addEventListener("resize", handle);
+    return () => window.removeEventListener("resize", handle);
+  }, [measure]);
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const element = containerRef.current;
+    if (!element) return;
+
+    const updateWidth = () => {
+      const nextWidth = element.offsetWidth;
+      setContainerWidth((prev) =>
+        Math.abs(prev - nextWidth) < 0.5 ? prev : nextWidth
+      );
+    };
+
+    updateWidth();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(updateWidth);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }, [steps.length]);
+
+  useEffect(() => {
+    if (!steps.length) return;
+    if (!containerWidth) return;
+    if (!measurements.fullWidths.length) return;
+
+    const dotWithConnector = measurements.dotWithConnector || measurements.dotWithoutConnector;
+    const dotWithoutConnector =
+      measurements.dotWithoutConnector || measurements.dotWithConnector;
+
+    if (steps.length > 1 && dotWithConnector === 0) return;
+    if (dotWithoutConnector === 0) return;
+
+    const fullWidths = measurements.fullWidths;
+    let totalWidth = fullWidths.reduce((sum, width) => sum + width, 0);
+    const nextModes = steps.map(() => "full");
+    const protectedSet = new Set(
+      [current - 1, current, current + 1].filter(
+        (idx) => idx >= 0 && idx < steps.length
+      )
+    );
+
+    const getWidth = (index, mode) => {
+      if (mode === "full") return fullWidths[index];
+      return index === steps.length - 1
+        ? dotWithoutConnector
+        : dotWithConnector;
+    };
+
+    const convert = (index) => {
+      if (nextModes[index] === "dot") return;
+      const prevWidth = getWidth(index, "full");
+      const nextWidth = getWidth(index, "dot");
+      totalWidth = totalWidth - prevWidth + nextWidth;
+      nextModes[index] = "dot";
+    };
+
+    const future = [];
+    for (let i = steps.length - 1; i >= 0; i--) {
+      if (i > current + 1 && !protectedSet.has(i)) {
+        future.push(i);
+      }
+    }
+
+    const past = [];
+    for (let i = 0; i < steps.length; i++) {
+      if (i < current - 1 && !protectedSet.has(i)) {
+        past.push(i);
+      }
+    }
+
+    const order = [...future, ...past];
+    for (const index of order) {
+      if (totalWidth <= containerWidth) break;
+      convert(index);
+    }
+
+    setDisplayModes((prev) => {
+      const sameLength = prev.length === nextModes.length;
+      if (
+        sameLength &&
+        prev.every((mode, index) => mode === nextModes[index])
+      ) {
+        return prev;
+      }
+      return nextModes;
+    });
+  }, [measurements, containerWidth, steps, current]);
+
   return (
     <div className="sticky top-0 z-10 bg-transparent px-4 sm:px-[7vw] pt-4">
       <div
@@ -477,7 +637,7 @@ function Stepper({ current, steps }) {
       >
         {steps.map((label, i) => (
           <span
-            key={`mobile-${label}`}
+            key={`mobile-${label}-${i}`}
             className={`h-2.5 w-2.5 rounded-full transition-colors duration-200 ${
               i === current ? "bg-white" : "bg-[#2a3357]"
             }`}
@@ -485,28 +645,107 @@ function Stepper({ current, steps }) {
           />
         ))}
       </div>
-      <div className="hidden sm:flex items-center gap-2 text-xs text-slate-300 overflow-x-auto pb-3">
-        {steps.map((label, i) => (
-          <div key={label} className="flex items-center gap-2 flex-shrink-0">
+      <div
+        ref={containerRef}
+        className="hidden sm:flex items-center justify-center overflow-hidden whitespace-nowrap pb-3"
+      >
+        {steps.map((label, index) => {
+          const mode = displayModes[index] ?? "full";
+          const isCurrent = index === current;
+          const isVisited = index < current;
+          const showConnector = index < steps.length - 1;
+
+          const circleBase =
+            "grid h-8 w-8 place-items-center rounded-full border text-xs font-semibold transition-colors duration-200";
+          let circleClasses = circleBase;
+          if (isCurrent) {
+            circleClasses += " bg-white text-[#0b1020] border-white shadow";
+          } else if (isVisited) {
+            circleClasses += " bg-[#151a32] text-slate-200 border-[#2a3357] opacity-90";
+          } else {
+            circleClasses += " border-[#2a3357] text-slate-300";
+          }
+
+          const labelBase = "ml-2 text-xs transition-colors duration-200";
+          let labelClasses = labelBase;
+          if (isCurrent) {
+            labelClasses += " font-semibold text-white";
+          } else if (isVisited) {
+            labelClasses += " text-slate-200";
+          } else {
+            labelClasses += " text-slate-400";
+          }
+
+          const dotClasses = `h-2.5 w-2.5 rounded-full flex-shrink-0 transition-colors duration-200 ${
+            isVisited ? "bg-white/70" : "bg-[#2a3357]"
+          }`;
+
+          return (
             <div
-              className={`w-7 h-7 grid place-items-center rounded-full border ${
-                i <= current
-                  ? "bg-white text-[#0b1020] border-white"
-                  : "border-[#2a3357] text-slate-300"
-              }`}
+              key={`${label}-${index}`}
+              className="flex items-center whitespace-nowrap"
             >
-              {i + 1}
+              {mode === "full" ? (
+                <>
+                  <span className={circleClasses}>{index + 1}</span>
+                  <span className={labelClasses}>{label}</span>
+                </>
+              ) : (
+                <span className="relative flex items-center">
+                  <span className={dotClasses} aria-hidden="true" />
+                  <span className="sr-only">
+                    Step {index + 1}: {label}
+                  </span>
+                </span>
+              )}
+              {showConnector && (
+                <span
+                  className={`${
+                    mode === "full" ? "mx-2 w-10" : "mx-1.5 w-6"
+                  } h-px bg-[#2a3357] flex-shrink-0`}
+                  aria-hidden="true"
+                />
+              )}
             </div>
-            <span
-              className={`${i === current ? "font-semibold" : "opacity-70"}`}
+          );
+        })}
+      </div>
+      <div
+        aria-hidden="true"
+        className="absolute -left-[9999px] top-0 h-0 overflow-hidden opacity-0"
+      >
+        <div className="flex items-center whitespace-nowrap">
+          {steps.map((label, index) => (
+            <div
+              key={`measure-${label}-${index}`}
+              ref={(el) => {
+                fullMeasureRefs.current[index] = el;
+              }}
+              className="flex items-center whitespace-nowrap text-xs"
             >
-              {label}
-            </span>
-            {i < steps.length - 1 && (
-              <div className="w-10 h-px bg-[#2a3357] mx-1 flex-shrink-0" />
-            )}
-          </div>
-        ))}
+              <span className="grid h-8 w-8 place-items-center rounded-full border border-white text-xs font-semibold">
+                {index + 1}
+              </span>
+              <span className="ml-2 text-xs font-semibold text-white">{label}</span>
+              {index < steps.length - 1 && (
+                <span className="mx-2 h-px w-10 bg-[#2a3357]" />
+              )}
+            </div>
+          ))}
+        </div>
+        <div
+          ref={dotMeasureRef}
+          className="mt-2 flex items-center whitespace-nowrap"
+        >
+          <span className="h-2.5 w-2.5 rounded-full bg-white" />
+          <span className="mx-1.5 h-px w-6 bg-[#2a3357]" />
+        </div>
+        <div
+          ref={dotLastMeasureRef}
+          className="mt-2 flex items-center whitespace-nowrap"
+        >
+          <span className="h-2.5 w-2.5 rounded-full bg-white" />
+        </div>
       </div>
     </div>
   );
