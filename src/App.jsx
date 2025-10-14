@@ -10,11 +10,14 @@ import React, {
 const APP_VERSION =
   typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.5";
 const VERSION_STORAGE_KEY = "contentos.version";
+const SETTINGS_STORAGE_KEYS = [
+  "contentos.brand",
+  "contentos.contentTypes",
+];
 const LOCAL_STORAGE_KEYS = [
   "contentos.session",
   "contentos.locks",
   "contentos.refdata",
-  "contentos.brand",
   "contentos.topics",
   "contentos.snapshot",
   "contentos.snapshot.chat",
@@ -22,8 +25,18 @@ const LOCAL_STORAGE_KEYS = [
   "contentos.podcast",
   "contentos.social.design",
   "contentos.n8n",
-  "contentos.contentTypes",
 ];
+
+const createDefaultBrand = () => ({
+  archetype: "",
+  tone: "",
+  audience: "",
+  values: "",
+  phrases: "",
+  style: "",
+});
+
+const createDefaultContentPreferences = () => [];
 
 const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*>/i;
 
@@ -866,6 +879,7 @@ function SettingsPage({
   onDirtyChange,
   webhooks,
   ensureSessionId,
+  onReset,
 }) {
   const [activeTab, setActiveTab] = useState("brand");
   const [showBrandDetails, setShowBrandDetails] = useState(true);
@@ -962,6 +976,18 @@ function SettingsPage({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleReset = () => {
+    if (!onReset || saving) return;
+    const confirmReset = window.confirm(
+      "Reset your saved settings? This will clear your brand voice and content preferences."
+    );
+    if (!confirmReset) return;
+    onReset();
+    onDirtyChange?.(false);
+    setSaveError(null);
+    setLastSavedAt(null);
   };
 
   return (
@@ -1194,18 +1220,28 @@ function SettingsPage({
             All changes saved{lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString()}` : ""}.
           </p>
         ) : null}
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!isDirty || saving}
-          className={`rounded-xl px-5 py-2 font-semibold transition ${
-            !isDirty || saving
-              ? "cursor-not-allowed bg-slate-500/40 text-slate-200"
-              : "bg-white text-[#0b1020]"
-          }`}
-        >
-          {saving ? "Saving…" : "Save settings"}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={saving}
+            className="rounded-xl border border-[#2a3357] px-5 py-2 text-sm font-semibold text-slate-200 transition hover:bg-[#1a2037] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Reset settings
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!isDirty || saving}
+            className={`rounded-xl px-5 py-2 font-semibold transition ${
+              !isDirty || saving
+                ? "cursor-not-allowed bg-slate-500/40 text-slate-200"
+                : "bg-white text-[#0b1020]"
+            }`}
+          >
+            {saving ? "Saving…" : "Save settings"}
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -2587,17 +2623,10 @@ function ContentOSApp() {
     headers: [],
     rows: [],
   });
-  const [brand, setBrand] = useLocal("contentos.brand", {
-    archetype: "",
-    tone: "",
-    audience: "",
-    values: "",
-    phrases: "",
-    style: "",
-  });
+  const [brand, setBrand] = useLocal("contentos.brand", createDefaultBrand());
   const [contentPreferences, setContentPreferences] = useLocal(
     "contentos.contentTypes",
-    []
+    createDefaultContentPreferences()
   );
   const [topics, setTopics] = useLocal("contentos.topics", []);
   useEffect(() => {
@@ -2811,6 +2840,16 @@ function ContentOSApp() {
     }
   };
 
+  const resetSettings = () => {
+    setBrand(createDefaultBrand());
+    setContentPreferences(createDefaultContentPreferences());
+    setLocks((locks) => ({ ...locks, brand: false }));
+    setHasUnsavedSettings(false);
+    try {
+      SETTINGS_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    } catch {}
+  };
+
   // snapshot/article change requests
   const sendSnapshotChat = async () => {
     if (snapshotChatSending) return;
@@ -2926,7 +2965,7 @@ function ContentOSApp() {
     }
     if (
       !window.confirm(
-        "Reset session? This clears brand, topics, snapshot, article, social, locks, refdata, and webhook settings."
+        "Reset session? This clears topics, snapshot, article, social, locks, refdata, and webhook settings. Your saved settings remain until you reset them from the Settings page."
       )
     )
       return false;
@@ -2934,22 +2973,18 @@ function ContentOSApp() {
       const toDelete = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k?.startsWith("contentos.")) toDelete.push(k);
+        if (
+          k?.startsWith("contentos.") &&
+          !SETTINGS_STORAGE_KEYS.includes(k)
+        ) {
+          toDelete.push(k);
+        }
       }
       toDelete.forEach((k) => localStorage.removeItem(k));
     } catch {}
     setSession({ id: "", startedAt: "" });
     setLocks({ brand: false });
-    setBrand({
-      archetype: "",
-      tone: "",
-      audience: "",
-      values: "",
-      phrases: "",
-      style: "",
-    });
     setTopics([]);
-    setContentPreferences([]);
     setTempTopic("");
     setTempContext("");
     setSnapshot({ text: "" });
@@ -3112,6 +3147,7 @@ function ContentOSApp() {
             onDirtyChange={setHasUnsavedSettings}
             webhooks={WEBHOOKS}
             ensureSessionId={ensureSessionId}
+            onReset={resetSettings}
           />
         )}
         {view === "topics" && (
