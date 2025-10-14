@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.20";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.21";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -1803,6 +1803,8 @@ function SnapshotPage({
   const [generatingSnapshot, setGeneratingSnapshot] = useState(false);
   const [draggingSectionId, setDraggingSectionId] = useState(null);
   const [printStamp] = useState(() => new Date());
+  const [sectionPrompts, setSectionPrompts] = useState({});
+  const [sectionRequesting, setSectionRequesting] = useState({});
 
   const sectionsWithMeta = useMemo(() => {
     const baseSections =
@@ -1884,6 +1886,84 @@ function SnapshotPage({
       });
     },
     [setSnapshot]
+  );
+
+  const handleSectionPromptChange = useCallback((id, value) => {
+    setSectionPrompts((prev) => ({ ...prev, [id]: value }));
+  }, []);
+
+  const requestSectionDraft = useCallback(
+    async (section) => {
+      const id = section.id;
+      if (!webhooks?.snapshotChange) {
+        alert("Please configure the delivery snapshot webhook in Settings first.");
+        return;
+      }
+      if (sectionRequesting[id]) return;
+
+      const prompt = (sectionPrompts[id] ?? "").trim();
+      setSectionRequesting((prev) => ({ ...prev, [id]: true }));
+
+      try {
+        const response = await fetch(webhooks.snapshotChange, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            type: "snapshot_section_fill",
+            timestamp: new Date().toISOString(),
+            sectionId: id,
+            sectionTitle: section.definition.title,
+            sectionHelper: section.definition.helper,
+            sectionPlaceholder: section.definition.placeholder,
+            sectionWordLimit: section.wordLimit,
+            prompt,
+            currentContent: section.content,
+            snapshotText: snapshot.text,
+            sections: snapshot.sections,
+            topics,
+            brand,
+            sessionId: ensureSessionId(),
+          }),
+        });
+
+        if (!response.ok) throw new Error("HTTP error");
+
+        const replyText = (await response.text()).trim();
+        if (replyText) {
+          setSnapshot((prev) => {
+            const nextSections = (
+              prev.sections && prev.sections.length
+                ? prev.sections
+                : createEmptySnapshotSections()
+            ).map((item) =>
+              item.id === id ? { ...item, content: replyText } : item
+            );
+            return {
+              ...prev,
+              sections: nextSections,
+            };
+          });
+        }
+
+        setSectionPrompts((prev) => ({ ...prev, [id]: "" }));
+      } catch (error) {
+        console.error(error);
+        alert("Could not request AI assistance for this section.");
+      } finally {
+        setSectionRequesting((prev) => ({ ...prev, [id]: false }));
+      }
+    },
+    [
+      webhooks,
+      sectionPrompts,
+      sectionRequesting,
+      snapshot.text,
+      snapshot.sections,
+      topics,
+      brand,
+      ensureSessionId,
+      setSnapshot,
+    ]
   );
 
 
@@ -2130,6 +2210,9 @@ function SnapshotPage({
               const definition = section.definition;
               const wordLimit = section.wordLimit;
               const SectionIcon = SNAPSHOT_SECTION_ICONS[definition.id];
+              const promptValue = sectionPrompts[section.id] ?? "";
+              const requesting = !!sectionRequesting[section.id];
+              const hasSnapshotWebhook = !!webhooks?.snapshotChange;
               let badgeTone =
                 "border-[#2a3357] bg-[#0f1427] text-slate-200";
               if (section.overLimit) {
@@ -2211,6 +2294,42 @@ function SnapshotPage({
                           </span>
                         ) : null}
                       </div>
+                      <form
+                        className="print-hidden mt-4 flex flex-col gap-2 sm:flex-row sm:items-center"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          requestSectionDraft(section);
+                        }}
+                      >
+                        <label
+                          htmlFor={`snapshot-section-prompt-${section.id}`}
+                          className="sr-only"
+                        >
+                          Ask AI to help with {definition.title}
+                        </label>
+                        <input
+                          id={`snapshot-section-prompt-${section.id}`}
+                          type="text"
+                          value={promptValue}
+                          onChange={(event) =>
+                            handleSectionPromptChange(section.id, event.target.value)
+                          }
+                          placeholder={`Ask AI to draft ${definition.title.toLowerCase()}…`}
+                          className="flex-1 rounded-lg border border-[#2a3357] bg-[#0f1427] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#566fee]/50"
+                        />
+                        <button
+                          type="submit"
+                          disabled={requesting || !hasSnapshotWebhook}
+                          className="inline-flex items-center justify-center rounded-lg border border-[#2a3357] bg-[#1d2442] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#232b54] disabled:cursor-not-allowed disabled:opacity-60"
+                          title={
+                            hasSnapshotWebhook
+                              ? undefined
+                              : "Set the delivery snapshot webhook in Settings to enable AI drafting."
+                          }
+                        >
+                          {requesting ? "Requesting…" : "Ask AI"}
+                        </button>
+                      </form>
                     </div>
                   </div>
                 </div>
