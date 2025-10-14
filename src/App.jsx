@@ -107,17 +107,8 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     required: true,
   },
   {
-    id: "metaphor",
-    title: "Metaphor",
-    helper: "Offer a vivid comparison that makes the model stick.",
-    placeholder:
-      "e.g., \"It’s like upgrading from a paper map to Waze for your buyer journey.\"",
-    maxWords: 280,
-    required: true,
-  },
-  {
     id: "caseStat",
-    title: "Case / Stat",
+    title: "Case Study / Statistics",
     helper: "Share one proof point—metric, testimonial, or mini-case.",
     placeholder:
       "e.g., \"After the shift, demos jumped 37% and close rates doubled in Q2.\"",
