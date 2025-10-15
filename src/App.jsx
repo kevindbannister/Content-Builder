@@ -2488,7 +2488,7 @@ function SnapshotPage({
                           htmlFor={`snapshot-section-prompt-${section.id}`}
                           className="sr-only"
                         >
-                          Ask AI to help with {definition.title}
+                          Ask AI to tweat something
                         </label>
                         <input
                           id={`snapshot-section-prompt-${section.id}`}
@@ -2497,7 +2497,7 @@ function SnapshotPage({
                           onChange={(event) =>
                             handleSectionPromptChange(section.id, event.target.value)
                           }
-                          placeholder={`Ask AI to draft ${definition.title.toLowerCase()}…`}
+                          placeholder="Ask AI to tweat something"
                           className="flex-1 rounded-lg border border-[#2a3357] bg-[#0f1427] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#566fee]/50"
                         />
                         <button
@@ -2510,7 +2510,9 @@ function SnapshotPage({
                               : "Set the delivery snapshot webhook in Settings to enable AI drafting."
                           }
                         >
-                          {requesting ? "Requesting…" : "Ask AI"}
+                          {requesting
+                            ? "Requesting…"
+                            : "Ask AI to tweat something"}
                         </button>
                       </form>
                     </div>
