@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { postSnapshot } from "@/lib/n8n";
 
 const APP_VERSION =
   typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.25";
@@ -538,6 +539,15 @@ const SNAPSHOT_SECTION_DEFINITIONS = [
     maxWords: 280,
     required: true,
   },
+];
+
+const SNAPSHOT_FIELD_KEYS = [
+  "problem",
+  "model",
+  "metaphor",
+  "caseStat",
+  "actionSteps",
+  "oneLiner",
 ];
 
 function createEmptySnapshotSections() {
@@ -2035,24 +2045,77 @@ function TopicsPage({
 
 function SnapshotPage({
   topics,
-  snapshot,
-  setSnapshot,
+  snapshot: snapshotProp,
+  setSnapshot: setSnapshotProp,
   navTo,
   nextViewId,
   webhooks,
   brand,
   ensureSessionId,
 }) {
+  /**
+   * @typedef {Object} Snapshot
+   * @property {string} problem
+   * @property {string} model
+   * @property {string} metaphor
+   * @property {string} caseStat
+   * @property {string} actionSteps
+   * @property {string} oneLiner
+   * @property {string=} topic
+   */
+  const [snapshot, setSnapshot] = useState({
+    problem: "",
+    model: "",
+    metaphor: "",
+    caseStat: "",
+    actionSteps: "",
+    oneLiner: "",
+    topic: "",
+  });
   const [generatingSnapshot, setGeneratingSnapshot] = useState(false);
   const [draggingSectionId, setDraggingSectionId] = useState(null);
   const [printStamp] = useState(() => new Date());
   const [sectionPrompts, setSectionPrompts] = useState({});
   const [sectionRequesting, setSectionRequesting] = useState({});
 
+  useEffect(() => {
+    const sectionMap = new Map();
+    if (Array.isArray(snapshotProp.sections)) {
+      snapshotProp.sections.forEach((section) => {
+        if (!section || typeof section.id !== "string") return;
+        sectionMap.set(
+          section.id,
+          typeof section.content === "string" ? section.content : ""
+        );
+      });
+    }
+    const topicFromTopics = topics?.[0]?.name ?? "";
+    setSnapshot((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      SNAPSHOT_FIELD_KEYS.forEach((key) => {
+        const value = sectionMap.get(key) ?? "";
+        if (value !== prev[key]) {
+          next[key] = value;
+          changed = true;
+        }
+      });
+      const topicValue =
+        typeof snapshotProp.topic === "string" && snapshotProp.topic
+          ? snapshotProp.topic
+          : prev.topic || topicFromTopics;
+      if (topicValue !== prev.topic) {
+        next.topic = topicValue ?? "";
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [snapshotProp.sections, snapshotProp.topic, topics]);
+
   const sectionsWithMeta = useMemo(() => {
     const baseSections =
-      snapshot.sections && snapshot.sections.length
-        ? snapshot.sections
+      snapshotProp.sections && snapshotProp.sections.length
+        ? snapshotProp.sections
         : createEmptySnapshotSections();
     return baseSections.map((section) => {
       const definition =
@@ -2101,7 +2164,7 @@ function SnapshotPage({
             : "";
         return id !== "statement" && title !== "statement";
       });
-  }, [snapshot.sections]);
+  }, [snapshotProp.sections]);
 
   const allRequiredComplete = useMemo(
     () =>
@@ -2114,7 +2177,8 @@ function SnapshotPage({
 
   const handleSectionChange = useCallback(
     (id, value) => {
-      setSnapshot((prev) => {
+      setSnapshot((prev) => ({ ...prev, [id]: value }));
+      setSnapshotProp((prev) => {
         const nextSections = (
           prev.sections && prev.sections.length
             ? prev.sections
@@ -2125,10 +2189,11 @@ function SnapshotPage({
         return {
           ...prev,
           sections: nextSections,
+          text: snapshotSectionsToHtml(nextSections),
         };
       });
     },
-    [setSnapshot]
+    [setSnapshotProp]
   );
 
   const handleSectionPromptChange = useCallback((id, value) => {
@@ -2161,8 +2226,8 @@ function SnapshotPage({
             sectionWordLimit: section.wordLimit,
             prompt,
             currentContent: section.content,
-            snapshotText: snapshot.text,
-            sections: snapshot.sections,
+            snapshotText: snapshotProp.text,
+            sections: snapshotProp.sections,
             topics,
             brand,
             sessionId: ensureSessionId(),
@@ -2173,7 +2238,8 @@ function SnapshotPage({
 
         const replyText = (await response.text()).trim();
         if (replyText) {
-          setSnapshot((prev) => {
+          setSnapshot((prev) => ({ ...prev, [id]: replyText }));
+          setSnapshotProp((prev) => {
             const nextSections = (
               prev.sections && prev.sections.length
                 ? prev.sections
@@ -2184,6 +2250,7 @@ function SnapshotPage({
             return {
               ...prev,
               sections: nextSections,
+              text: snapshotSectionsToHtml(nextSections),
             };
           });
         }
@@ -2200,12 +2267,12 @@ function SnapshotPage({
       webhooks,
       sectionPrompts,
       sectionRequesting,
-      snapshot.text,
-      snapshot.sections,
+      snapshotProp.text,
+      snapshotProp.sections,
       topics,
       brand,
       ensureSessionId,
-      setSnapshot,
+      setSnapshotProp,
     ]
   );
 
@@ -2228,7 +2295,7 @@ function SnapshotPage({
         draggingSectionId || event.dataTransfer.getData("text/plain");
       setDraggingSectionId(null);
       if (!sourceId || sourceId === targetId) return;
-      setSnapshot((prev) => {
+      setSnapshotProp((prev) => {
         const currentSections =
           prev.sections && prev.sections.length
             ? [...prev.sections]
@@ -2245,10 +2312,11 @@ function SnapshotPage({
         return {
           ...prev,
           sections: currentSections,
+          text: snapshotSectionsToHtml(currentSections),
         };
       });
     },
-    [draggingSectionId, setSnapshot]
+    [draggingSectionId, setSnapshotProp]
   );
 
   const handleDragEnd = useCallback(() => {
@@ -2260,7 +2328,7 @@ function SnapshotPage({
     try {
       setGeneratingSnapshot(true);
       const payload = {
-        snapshotText: snapshot.text,
+        snapshotText: snapshotProp.text,
         topic: topics[0] ?? null,
         topics,
         brand,
@@ -2278,7 +2346,7 @@ function SnapshotPage({
       if (!res.ok) throw new Error("HTTP error");
       const rawText = await res.text();
       const extracted = extractSnapshotText(rawText).trim();
-      setSnapshot((prev) => ({
+      setSnapshotProp((prev) => ({
         ...prev,
         aiDraft: extracted ? ensureHtmlContent(extracted) : "",
       }));
@@ -2292,12 +2360,81 @@ function SnapshotPage({
   }, [
     webhooks,
     generatingSnapshot,
-    snapshot.text,
+    snapshotProp.text,
     topics,
     brand,
     ensureSessionId,
-    setSnapshot,
+    setSnapshotProp,
   ]);
+
+  const handleGenerateSnapshot = useCallback(
+    async (payload = {}) => {
+      try {
+        const data = await postSnapshot(payload);
+        const ds = (data && data.snapshot) || {};
+        const normalized = {};
+        SNAPSHOT_FIELD_KEYS.forEach((key) => {
+          const rawValue = ds?.[key];
+          normalized[key] =
+            typeof rawValue === "string"
+              ? rawValue
+              : rawValue == null
+              ? ""
+              : String(rawValue);
+        });
+        const topicValue =
+          typeof ds?.topic === "string" && ds.topic.trim()
+            ? ds.topic
+            : undefined;
+
+        setSnapshot((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          SNAPSHOT_FIELD_KEYS.forEach((key) => {
+            const value = normalized[key] ?? "";
+            if (value !== prev[key]) {
+              next[key] = value;
+              changed = true;
+            }
+          });
+          if (topicValue && topicValue !== prev.topic) {
+            next.topic = topicValue;
+            changed = true;
+          }
+          return changed ? next : prev;
+        });
+
+        setSnapshotProp((prev) => {
+          const nextSections = (
+            prev.sections && prev.sections.length
+              ? prev.sections
+              : createEmptySnapshotSections()
+          ).map((section) => {
+            if (!section || typeof section.id !== "string") return section;
+            if (!SNAPSHOT_FIELD_KEYS.includes(section.id)) return section;
+            const value = normalized[section.id] ?? "";
+            return { ...section, content: value };
+          });
+          const nextState = {
+            ...prev,
+            sections: nextSections,
+            text: snapshotSectionsToHtml(nextSections),
+          };
+          if (topicValue) {
+            nextState.topic = topicValue;
+          }
+          return nextState;
+        });
+
+        return ds;
+      } catch (error) {
+        console.error("Failed to generate snapshot", error);
+        alert("Could not generate an updated delivery snapshot.");
+        return null;
+      }
+    },
+    [setSnapshotProp]
+  );
 
   const brandSummary = useMemo(() => {
     if (!brand) return "";
@@ -2438,6 +2575,45 @@ function SnapshotPage({
           </div>
         </aside>
         <div className="flex-1 space-y-6">
+          <div className="print-hidden rounded-2xl border border-[#232941] bg-[#121629] p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">
+                  Snapshot Controls
+                </h3>
+                <p className="text-sm text-slate-400">
+                  Send your current snapshot to AI for refinements.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  handleGenerateSnapshot({
+                    topic: snapshot.topic || topics[0]?.name || "",
+                    current: snapshot,
+                  })
+                }
+                className="inline-flex items-center justify-center rounded-lg border border-[#2a3357] bg-[#1d2442] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#232b54]"
+              >
+                Ask AI to tweak something
+              </button>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm text-slate-200">
+                Topic hint
+                <input
+                  value={snapshot.topic ?? ""}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSnapshot((prev) => ({ ...prev, topic: value }));
+                    setSnapshotProp((prev) => ({ ...prev, topic: value }));
+                  }}
+                  placeholder="Optional topic override"
+                  className="mt-2 w-full rounded-lg border border-[#2a3357] bg-[#0f1427] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#566fee]/50"
+                />
+              </label>
+            </div>
+          </div>
           <div className="space-y-4">
             {sectionsWithMeta.map((section) => {
               const definition = section.definition;
@@ -2504,7 +2680,7 @@ function SnapshotPage({
                         </span>
                       </div>
                       <textarea
-                        value={section.content}
+                        value={snapshot[section.id] ?? ""}
                         onChange={(event) =>
                           handleSectionChange(section.id, event.target.value)
                         }
@@ -2538,7 +2714,7 @@ function SnapshotPage({
                           htmlFor={`snapshot-section-prompt-${section.id}`}
                           className="sr-only"
                         >
-                          Ask AI to tweat something
+                          Ask AI to tweak something
                         </label>
                         <input
                           id={`snapshot-section-prompt-${section.id}`}
@@ -2547,7 +2723,7 @@ function SnapshotPage({
                           onChange={(event) =>
                             handleSectionPromptChange(section.id, event.target.value)
                           }
-                          placeholder="Ask AI to tweat something"
+                          placeholder="Ask AI to tweak something"
                           className="flex-1 rounded-lg border border-[#2a3357] bg-[#0f1427] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#566fee]/50"
                         />
                         <button
@@ -2562,7 +2738,7 @@ function SnapshotPage({
                         >
                           {requesting
                             ? "Requesting…"
-                            : "Ask AI to tweat something"}
+                            : "Ask AI to tweak something"}
                         </button>
                       </form>
                     </div>
@@ -2571,7 +2747,7 @@ function SnapshotPage({
               );
             })}
           </div>
-          {snapshot.aiDraft ? (
+          {snapshotProp.aiDraft ? (
             <div className="snapshot-preview-card rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -2585,11 +2761,19 @@ function SnapshotPage({
               </div>
               <div
                 className="snapshot-print-card mt-4 space-y-3 rounded-xl border border-dashed border-[#2a3357] bg-[#0f1427] p-4 text-sm leading-relaxed text-slate-200"
-                dangerouslySetInnerHTML={{ __html: snapshot.aiDraft }}
+                dangerouslySetInnerHTML={{ __html: snapshotProp.aiDraft }}
               />
             </div>
           ) : null}
         </div>
+      </div>
+      <div className="print-hidden mt-6 overflow-x-auto rounded-2xl border border-dashed border-[#2a3357] bg-[#0a0f22] p-4">
+        <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+          Snapshot debug
+        </h4>
+        <pre className="text-xs opacity-70">
+          {JSON.stringify(snapshot, null, 2)}
+        </pre>
       </div>
       <div className="snapshot-print-only hidden print:block">
         <h1 className="snapshot-print-title">Delivery Snapshot</h1>
