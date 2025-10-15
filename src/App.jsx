@@ -2811,45 +2811,6 @@ function SnapshotPage({
           </div>
         </aside>
         <div className="flex-1 space-y-6">
-          <div className="print-hidden rounded-2xl border border-[#232941] bg-[#121629] p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-100">
-                  Snapshot Controls
-                </h3>
-                <p className="text-sm text-slate-400">
-                  Send your current snapshot to AI for refinements.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  handleGenerateSnapshot({
-                    topic: snapshot.topic || topics[0]?.name || "",
-                    current: snapshot,
-                  })
-                }
-                className="inline-flex items-center justify-center rounded-lg border border-[#2a3357] bg-[#1d2442] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#232b54]"
-              >
-                Ask AI to tweak something
-              </button>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm text-slate-200">
-                Topic hint
-                <input
-                  value={snapshot.topic ?? ""}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setSnapshot((prev) => ({ ...prev, topic: value }));
-                    setSnapshotProp((prev) => ({ ...prev, topic: value }));
-                  }}
-                  placeholder="Optional topic override"
-                  className="mt-2 w-full rounded-lg border border-[#2a3357] bg-[#0f1427] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#566fee]/50"
-                />
-              </label>
-            </div>
-          </div>
           <div className="space-y-4">
             {sectionsWithMeta.map((section) => {
               const definition = section.definition;
