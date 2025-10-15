@@ -48,6 +48,63 @@ const createDefaultPlannerState = () => ({
   lastUpdatedAt: null,
 });
 
+const TOAST_DEFAULT_DURATION = 4000;
+
+function useToast(duration = TOAST_DEFAULT_DURATION) {
+  const [toast, setToast] = useState(null);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    timerRef.current = setTimeout(() => {
+      setToast(null);
+      timerRef.current = null;
+    }, duration);
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [toast, duration]);
+
+  const showToast = useCallback((message, tone = "info") => {
+    if (!message) return;
+    setToast({ id: Date.now(), message, tone });
+  }, []);
+
+  return { toast, showToast };
+}
+
+function ToastOverlay({ toast }) {
+  if (!toast) return null;
+
+  const toneClass =
+    toast.tone === "error"
+      ? "bg-rose-500 text-white"
+      : "bg-emerald-400 text-[#0b1020]";
+  const role = toast.tone === "error" ? "alert" : "status";
+  const ariaLive = toast.tone === "error" ? "assertive" : "polite";
+
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+      <div
+        role={role}
+        aria-live={ariaLive}
+        className={`pointer-events-auto rounded-lg px-4 py-2 text-sm font-semibold shadow-lg shadow-black/30 ${toneClass}`}
+      >
+        {toast.message}
+      </div>
+    </div>
+  );
+}
+
 const normalizePlannerState = (input) => {
   if (!input) return createDefaultPlannerState();
   if (Array.isArray(input)) {
@@ -2063,6 +2120,7 @@ function SnapshotPage({
    * @property {string} oneLiner
    * @property {string=} topic
    */
+  const { toast, showToast } = useToast();
   const [snapshot, setSnapshot] = useState({
     problem: "",
     model: "",
@@ -2426,14 +2484,20 @@ function SnapshotPage({
           return nextState;
         });
 
+        showToast("Snapshot updated.", "success");
+
         return ds;
       } catch (error) {
         console.error("Failed to generate snapshot", error);
-        alert("Could not generate an updated delivery snapshot.");
+        const message =
+          (error instanceof Error && error.message) ||
+          (typeof error === "string" && error) ||
+          "Could not generate an updated delivery snapshot.";
+        showToast(message, "error");
         return null;
       }
     },
-    [setSnapshotProp]
+    [setSnapshotProp, showToast]
   );
 
   const brandSummary = useMemo(() => {
@@ -2466,12 +2530,14 @@ function SnapshotPage({
     : "Complete each section to unlock export and send.";
 
   return (
-    <section className="min-h-screen px-[7vw] py-16">
-      <header className="mb-6 space-y-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-slate-50">Delivery Snapshot</h2>
-            <p className="mt-1 text-sm text-slate-300">
+    <>
+      <ToastOverlay toast={toast} />
+      <section className="min-h-screen px-[7vw] py-16">
+        <header className="mb-6 space-y-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-slate-50">Delivery Snapshot</h2>
+              <p className="mt-1 text-sm text-slate-300">
               Make each section crisp and scan-friendly before exporting to your team.
             </p>
           </div>
@@ -2809,7 +2875,8 @@ function SnapshotPage({
           <div>{brandSummary || "No brand context captured yet."}</div>
         </div>
       </div>
-    </section>
+      </section>
+    </>
   );
 }
 
