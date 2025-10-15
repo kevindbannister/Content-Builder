@@ -2574,10 +2574,41 @@ function SnapshotPage({
       if (!res.ok) throw new Error("HTTP error");
       const rawText = await res.text();
       const extracted = extractSnapshotText(rawText).trim();
-      setSnapshotProp((prev) => ({
-        ...prev,
-        aiDraft: extracted ? ensureHtmlContent(extracted) : "",
-      }));
+
+      if (extracted) {
+        setSnapshot((prev) => {
+          if (prev.problem === extracted) {
+            return prev;
+          }
+          return { ...prev, problem: extracted };
+        });
+      }
+
+      setSnapshotProp((prev) => {
+        const aiDraft = extracted ? ensureHtmlContent(extracted) : "";
+        const baseSections =
+          prev.sections && prev.sections.length
+            ? prev.sections
+            : createEmptySnapshotSections();
+        const hasProblemContent = !!extracted;
+        const nextSections = hasProblemContent
+          ? baseSections.map((section) =>
+              section.id === "problem"
+                ? { ...section, content: extracted }
+                : section
+            )
+          : baseSections;
+        return {
+          ...prev,
+          aiDraft,
+          ...(hasProblemContent
+            ? {
+                sections: nextSections,
+                text: snapshotSectionsToHtml(nextSections),
+              }
+            : {}),
+        };
+      });
       alert("Requested delivery snapshot generation ✔︎");
     } catch (error) {
       console.error(error);
