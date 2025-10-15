@@ -3133,26 +3133,39 @@ function ArticlePage({
         <div className="flex justify-end mt-3">
           <button
             onClick={async () => {
-              if (!n8n.webhook.trim()) {
-                alert("Please set your n8n webhook URL first.");
-                return;
-              }
+              const sessionId = ensureSessionId
+                ? ensureSessionId()
+                : undefined;
+              const collectedData = {
+                session,
+                locks,
+                brand,
+                contentPreferences,
+                topics,
+                snapshot,
+                snapshotChatMessages,
+                article,
+                podcast,
+                social,
+                planner: plannerState,
+                refdata,
+                n8n,
+                archives,
+              };
               try {
                 const ok = await postWebhook(
-                  n8n.webhook,
-                  "generate_social_from_article",
+                  "http://localhost:5678/webhook-test/b30e07dc-0218-493a-a99f-3e0ad96429fc",
+                  "generate_article",
                   {
-                    articleContent: article.content,
-                    topics,
-                    brand,
-                    sessionId: ensureSessionId ? ensureSessionId() : undefined,
+                    sessionId,
+                    ...collectedData,
                   }
                 );
                 if (!ok) throw new Error("HTTP error");
-                alert("Requested social generation via n8n ✔︎");
+                alert("Requested article generation via local webhook ✔︎");
               } catch (e) {
                 console.error(e);
-                alert("n8n request failed.");
+                alert("Local webhook request failed.");
               }
             }}
             className="bg-[#222845] border border-[#2a3357] text-white font-bold px-4 py-2 rounded-xl"
