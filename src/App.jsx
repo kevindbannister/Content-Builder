@@ -607,6 +607,146 @@ const SNAPSHOT_FIELD_KEYS = [
   "oneLiner",
 ];
 
+const SNAPSHOT_CANONICAL_KEY_LOOKUP = {
+  problem: "problem",
+  model: "model",
+  metaphor: "metaphor",
+  casestat: "caseStat",
+  casestats: "caseStat",
+  casestudy: "caseStat",
+  casestudies: "caseStat",
+  casestatistic: "caseStat",
+  casestatistics: "caseStat",
+  actionsteps: "actionSteps",
+  actionssteps: "actionSteps",
+  actionplan: "actionSteps",
+  oneliner: "oneLiner",
+  oneline: "oneLiner",
+  topic: "topic",
+};
+
+function canonicalSnapshotKey(key) {
+  if (typeof key !== "string") return null;
+  const trimmed = key.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  const withoutPrefix = lower.startsWith("ds_")
+    ? lower.slice(3)
+    : lower.startsWith("snapshot_")
+    ? lower.slice(9)
+    : lower;
+  const collapsed = withoutPrefix.replace(/[^a-z0-9]/g, "");
+  return SNAPSHOT_CANONICAL_KEY_LOOKUP[collapsed] || null;
+}
+
+function coerceSnapshotValue(value) {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => coerceSnapshotValue(item))
+      .filter((item) => typeof item === "string" && item.trim())
+      .join("\n");
+  }
+  if (value && typeof value === "object") return "";
+  if (value == null) return "";
+  return String(value);
+}
+
+function extractSnapshotFromSections(sections) {
+  if (!Array.isArray(sections)) return null;
+  const result = {};
+  let found = false;
+  sections.forEach((section) => {
+    if (!section || typeof section !== "object") return;
+    const id = section.id ?? section.key;
+    const canonical = canonicalSnapshotKey(id);
+    if (!canonical) return;
+    const value = coerceSnapshotValue(
+      section.content ?? section.text ?? section.value ?? ""
+    );
+    if (canonical === "topic") {
+      result.topic = value;
+      found = true;
+      return;
+    }
+    if (!SNAPSHOT_FIELD_KEYS.includes(canonical)) return;
+    result[canonical] = value;
+    found = true;
+  });
+  return found ? result : null;
+}
+
+function extractSnapshotFromObject(source) {
+  if (!source || typeof source !== "object") return null;
+  const result = {};
+  let found = false;
+
+  Object.entries(source).forEach(([key, rawValue]) => {
+    const canonical = canonicalSnapshotKey(key);
+    if (!canonical) return;
+    const value = coerceSnapshotValue(rawValue);
+    if (canonical === "topic") {
+      result.topic = value;
+      found = true;
+      return;
+    }
+    if (!SNAPSHOT_FIELD_KEYS.includes(canonical)) return;
+    result[canonical] = value;
+    found = true;
+  });
+
+  const fromSections = extractSnapshotFromSections(source.sections);
+  if (fromSections) {
+    Object.assign(result, fromSections);
+    found = true;
+  }
+
+  const update = source.deliverySnapshotUpdate;
+  if (update && typeof update === "object") {
+    const updateSections = extractSnapshotFromSections(update.sections);
+    if (updateSections) {
+      Object.assign(result, updateSections);
+      found = true;
+    }
+    const topicValue = coerceSnapshotValue(update.topic ?? update.ds_topic ?? "");
+    if (topicValue) {
+      result.topic = topicValue;
+      found = true;
+    }
+  }
+
+  return found ? result : null;
+}
+
+function extractSnapshotPayload(input, visited = new Set()) {
+  if (!input || visited.has(input)) return null;
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      const result = extractSnapshotPayload(item, visited);
+      if (result) return result;
+    }
+    return null;
+  }
+  if (typeof input !== "object") return null;
+  visited.add(input);
+
+  if (input.snapshot && typeof input.snapshot === "object") {
+    const fromSnapshot = extractSnapshotFromObject(input.snapshot);
+    if (fromSnapshot) return fromSnapshot;
+  }
+
+  const fromSelf = extractSnapshotFromObject(input);
+  if (fromSelf) return fromSelf;
+
+  for (const value of Object.values(input)) {
+    if (typeof value !== "object" || value == null) continue;
+    const result = extractSnapshotPayload(value, visited);
+    if (result) return result;
+  }
+
+  return null;
+}
+
 function createEmptySnapshotSections() {
   return SNAPSHOT_SECTION_DEFINITIONS.map((definition) => ({
     id: definition.id,
@@ -2429,7 +2569,7 @@ function SnapshotPage({
     async (payload = {}) => {
       try {
         const data = await postSnapshot(payload);
-        const ds = (data && data.snapshot) || {};
+        const ds = extractSnapshotPayload(data) || {};
         const normalized = {};
         SNAPSHOT_FIELD_KEYS.forEach((key) => {
           const rawValue = ds?.[key];
