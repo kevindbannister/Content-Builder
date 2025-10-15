@@ -9,7 +9,7 @@ import React, {
 import { postSnapshot } from "@/lib/n8n";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.25";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.25.10";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
