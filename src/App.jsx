@@ -2292,12 +2292,24 @@ function SnapshotPage({
 
   return (
     <section className="min-h-screen px-[7vw] py-16">
-      <header className="mb-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-50">Delivery Snapshot</h2>
-          <p className="mt-1 text-sm text-slate-300">
-            Make each section crisp and scan-friendly before exporting to your team.
-          </p>
+      <header className="mb-6 space-y-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-slate-50">Delivery Snapshot</h2>
+            <p className="mt-1 text-sm text-slate-300">
+              Make each section crisp and scan-friendly before exporting to your team.
+            </p>
+          </div>
+          <div className="print-hidden flex flex-col items-start gap-2 text-left lg:items-end lg:text-right">
+            <p className="text-xs text-slate-400">{statusMessage}</p>
+            <button
+              onClick={() => navTo("article")}
+              disabled={!allRequiredComplete}
+              className="rounded-xl bg-[#f6c863] px-4 py-2 font-bold text-[#0b1020] transition hover:bg-[#f9d784] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Export Snapshot & Continue →
+            </button>
+          </div>
         </div>
         {!!topics.length && (
           <div className="print-hidden w-full max-w-xl rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
@@ -2537,16 +2549,6 @@ function SnapshotPage({
               />
             </div>
           ) : null}
-          <div className="print-hidden mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-slate-400">{statusMessage}</p>
-            <button
-              onClick={() => navTo("article")}
-              disabled={!allRequiredComplete}
-              className="rounded-xl bg-white px-4 py-2 font-bold text-[#0b1020] transition disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Export Snapshot & Continue →
-            </button>
-          </div>
         </div>
       </div>
       <div className="snapshot-print-only hidden print:block">
@@ -4963,9 +4965,11 @@ function ContentOSApp() {
             >
               New
             </button>
-            <span className="text-[11px] uppercase tracking-wide">
-              Ver {displayVersion}
-            </span>
+            {view !== "snapshot" && (
+              <span className="text-[11px] uppercase tracking-wide">
+                Ver {displayVersion}
+              </span>
+            )}
           </div>
         </div>
 
