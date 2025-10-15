@@ -1155,6 +1155,9 @@ const WEBHOOKS = {
     "http://localhost:5678/webhook-test/2e4f0e19-7d7e-4597-bb7c-6dd6c14b9d48",
 };
 
+const ARTICLE_CHANGE_WEBHOOK =
+  "http://localhost:5678/webhook-test/fedd58f3-fd1f-4a77-a062-ce524cb05472";
+
 const SAMPLE_POLLS = [
   {
     question: "Which format do you prefer?",
@@ -3214,8 +3217,8 @@ function ArticlePage({
           </div>
         </div>
         <p className="text-xs text-slate-400 mt-2">
-          Press Ctrl + Enter to send instantly. Payload includes your change text,
-          current article, topics, and brand metadata.
+          Press Ctrl + Enter to send instantly. Payload includes your change
+          request and the current article content.
         </p>
       </div>
       <div className="mt-10 flex justify-end">
@@ -5311,23 +5314,22 @@ function ContentOSApp() {
   const sendArticleChange = async () => {
     if (!articleChange.trim())
       return alert("Please type the article changes you want to send.");
-    if (!n8n.webhook?.trim())
-      return alert("Please set your n8n webhook URL first.");
     try {
       setSendingArticle(true);
-      const ok = await postWebhook(n8n.webhook, "article_change_request", {
-        changes: articleChange,
-        articleContent: article.content,
-        topics,
-        brand,
-        sessionId: ensureSessionId(),
-      });
+      const { ok } = await postWebhook(
+        ARTICLE_CHANGE_WEBHOOK,
+        "article_change_request",
+        {
+          article: article.content,
+          changeRequest: articleChange,
+        }
+      );
       if (!ok) throw new Error("HTTP error");
-      alert("Article change request sent to n8n ✔︎");
+      alert("Article change request sent ✔︎");
       setArticleChange("");
     } catch (e) {
       console.error(e);
-      alert("Could not send to n8n.");
+      alert("Could not send to the article webhook.");
     } finally {
       setSendingArticle(false);
     }
