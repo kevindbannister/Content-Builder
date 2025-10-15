@@ -1,7 +1,7 @@
 {
   "name": "contentos-app",
   "private": true,
-  "version": "1.9.21",
+  "version": "1.9.25",
   "type": "module",
   "scripts": {
     "dev": "vite",

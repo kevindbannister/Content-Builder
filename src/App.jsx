@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.21";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.9.25";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -2350,7 +2350,7 @@ function SnapshotPage({
           </div>
         </div>
         {!!topics.length && (
-          <div className="print-hidden w-full max-w-xl rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
+          <div className="print-hidden w-full rounded-2xl border border-[#232941] bg-[#121629] p-5 shadow-sm">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
@@ -2380,7 +2380,7 @@ function SnapshotPage({
                 </div>
               </div>
             </div>
-            <ul className="grid gap-3 md:grid-cols-2">
+            <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {topics.map((topic) => (
                 <li key={topic.id} className="rounded-xl border border-[#2a3357] bg-[#151a32] p-4">
                   <div className="font-semibold text-slate-100">{topic.name}</div>
