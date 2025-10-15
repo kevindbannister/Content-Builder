@@ -542,6 +542,9 @@ const SNAPSHOT_SECTION_ICONS = {
   ),
 };
 
+const PROBLEM_SECTION_WEBHOOK =
+  "http://localhost:5678/webhook-test/b1982353-2659-4fc6-92c3-2146df455991";
+
 const SNAPSHOT_SECTION_DEFINITIONS = [
   {
     id: "problem",
@@ -2401,7 +2404,12 @@ function SnapshotPage({
   const requestSectionDraft = useCallback(
     async (section) => {
       const id = section.id;
-      if (!webhooks?.snapshotChange) {
+      const isProblemSection = id === "problem";
+      const targetWebhook = isProblemSection
+        ? PROBLEM_SECTION_WEBHOOK
+        : webhooks?.snapshotChange;
+
+      if (!targetWebhook) {
         alert("Please configure the delivery snapshot webhook in Settings first.");
         return;
       }
@@ -2411,25 +2419,33 @@ function SnapshotPage({
       setSectionRequesting((prev) => ({ ...prev, [id]: true }));
 
       try {
-        const response = await fetch(webhooks.snapshotChange, {
+        const basePayload = {
+          type: "snapshot_section_fill",
+          timestamp: new Date().toISOString(),
+          sectionId: id,
+          sectionTitle: section.definition.title,
+          sectionHelper: section.definition.helper,
+          sectionPlaceholder: section.definition.placeholder,
+          sectionWordLimit: section.wordLimit,
+          prompt,
+          currentContent: section.content,
+        };
+
+        const payload = isProblemSection
+          ? basePayload
+          : {
+              ...basePayload,
+              snapshotText: snapshotProp.text,
+              sections: snapshotProp.sections,
+              topics,
+              brand,
+              sessionId: ensureSessionId(),
+            };
+
+        const response = await fetch(targetWebhook, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            type: "snapshot_section_fill",
-            timestamp: new Date().toISOString(),
-            sectionId: id,
-            sectionTitle: section.definition.title,
-            sectionHelper: section.definition.helper,
-            sectionPlaceholder: section.definition.placeholder,
-            sectionWordLimit: section.wordLimit,
-            prompt,
-            currentContent: section.content,
-            snapshotText: snapshotProp.text,
-            sections: snapshotProp.sections,
-            topics,
-            brand,
-            sessionId: ensureSessionId(),
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) throw new Error("HTTP error");
@@ -2827,7 +2843,9 @@ function SnapshotPage({
               const SectionIcon = SNAPSHOT_SECTION_ICONS[definition.id];
               const promptValue = sectionPrompts[section.id] ?? "";
               const requesting = !!sectionRequesting[section.id];
-              const hasSnapshotWebhook = !!webhooks?.snapshotChange;
+              const isProblemSection = section.id === "problem";
+              const hasSnapshotWebhook =
+                isProblemSection || !!webhooks?.snapshotChange;
               let badgeTone =
                 "border-[#2a3357] bg-[#0f1427] text-slate-200";
               if (section.overLimit) {
