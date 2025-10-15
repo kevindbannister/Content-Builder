@@ -2288,6 +2288,7 @@ function SnapshotPage({
     topic: "",
   });
   const [generatingSnapshot, setGeneratingSnapshot] = useState(false);
+  const [snapshotWebhookResponse, setSnapshotWebhookResponse] = useState(undefined);
   const [draggingSectionId, setDraggingSectionId] = useState(null);
   const [printStamp] = useState(() => new Date());
   const [sectionPrompts, setSectionPrompts] = useState({});
@@ -2630,6 +2631,7 @@ function SnapshotPage({
     async (payload = {}) => {
       try {
         const data = await postSnapshot(payload);
+        setSnapshotWebhookResponse(data);
         const ds = extractSnapshotPayload(data) || {};
         const normalized = {};
         SNAPSHOT_FIELD_KEYS.forEach((key) => {
@@ -2690,6 +2692,13 @@ function SnapshotPage({
         return ds;
       } catch (error) {
         console.error("Failed to generate snapshot", error);
+        setSnapshotWebhookResponse(
+          error && typeof error === "object"
+            ? "body" in error && error.body !== undefined
+              ? error.body
+              : error.message ?? null
+            : error ?? null
+        );
         const message =
           (error instanceof Error && error.message) ||
           (typeof error === "string" && error) ||
@@ -3004,6 +3013,18 @@ function SnapshotPage({
         <pre className="text-xs opacity-70">
           {JSON.stringify(snapshot, null, 2)}
         </pre>
+      </div>
+      <div className="print-hidden mt-6 overflow-x-auto rounded-2xl border border-dashed border-[#2a3357] bg-[#0a0f22] p-4">
+        <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+          Snapshot webhook response
+        </h4>
+        {snapshotWebhookResponse === undefined ? (
+          <p className="text-xs text-slate-500">No webhook responses captured yet.</p>
+        ) : (
+          <pre className="text-xs opacity-70">
+            {JSON.stringify(snapshotWebhookResponse, null, 2)}
+          </pre>
+        )}
       </div>
       <div className="snapshot-print-only hidden print:block">
         <h1 className="snapshot-print-title">Delivery Snapshot</h1>
