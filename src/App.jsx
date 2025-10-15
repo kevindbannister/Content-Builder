@@ -630,11 +630,25 @@ function canonicalSnapshotKey(key) {
   const trimmed = key.trim();
   if (!trimmed) return null;
   const lower = trimmed.toLowerCase();
-  const withoutPrefix = lower.startsWith("ds_")
-    ? lower.slice(3)
-    : lower.startsWith("snapshot_")
-    ? lower.slice(9)
-    : lower;
+  const PREFIXES = [
+    "ds_",
+    "des_",
+    "snapshot_",
+    "delivery_snapshot_",
+    "deliverysnapshot_",
+  ];
+  let withoutPrefix = lower;
+  let prefixApplied = true;
+  while (prefixApplied && withoutPrefix) {
+    prefixApplied = false;
+    for (const prefix of PREFIXES) {
+      if (withoutPrefix.startsWith(prefix)) {
+        withoutPrefix = withoutPrefix.slice(prefix.length);
+        prefixApplied = true;
+        break;
+      }
+    }
+  }
   const collapsed = withoutPrefix.replace(/[^a-z0-9]/g, "");
   return SNAPSHOT_CANONICAL_KEY_LOOKUP[collapsed] || null;
 }
