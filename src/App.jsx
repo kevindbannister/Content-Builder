@@ -931,17 +931,6 @@ const WEBHOOKS = {
     "http://localhost:5678/webhook-test/2e4f0e19-7d7e-4597-bb7c-6dd6c14b9d48",
 };
 
-const FLOW_ORDER = [
-  "topics",
-  "snapshot",
-  "article",
-  "social",
-  "polls",
-  "images",
-  "podcast",
-  "planner",
-];
-
 const SAMPLE_POLLS = [
   {
     question: "Which format do you prefer?",
@@ -1043,6 +1032,54 @@ const Icon = {
     </svg>
   ),
 };
+
+const VIEW_DEFINITIONS = [
+  { id: "topics", label: "Topic", stepLabel: "Topic", icon: Icon.List },
+  {
+    id: "snapshot",
+    label: "Delivery Snapshot",
+    stepLabel: "Snapshot",
+    icon: Icon.Camera,
+  },
+  {
+    id: "article",
+    label: "Article",
+    stepLabel: "Article",
+    icon: Icon.Doc,
+    preference: "Articles",
+  },
+  {
+    id: "social",
+    label: "Short Form Videos",
+    stepLabel: "Short Form Videos",
+    icon: Icon.Video,
+    preference: "Short Videos",
+  },
+  {
+    id: "polls",
+    label: "Polls",
+    stepLabel: "Polls",
+    icon: Icon.Poll,
+    preference: "Polls",
+  },
+  {
+    id: "images",
+    label: "Image Posts",
+    stepLabel: "Image Posts",
+    icon: Icon.Image,
+    preference: "Image Posts",
+  },
+  {
+    id: "podcast",
+    label: "Podcast Script",
+    stepLabel: "Podcast",
+    icon: Icon.Mic,
+    preference: "Podcasts",
+  },
+  { id: "planner", label: "Planner", stepLabel: "Planner", icon: Icon.Calendar },
+];
+
+const BASE_FLOW_ORDER = VIEW_DEFINITIONS.map(({ id }) => id);
 
 // ----------------------
 // Small UI helpers
@@ -2001,6 +2038,7 @@ function SnapshotPage({
   snapshot,
   setSnapshot,
   navTo,
+  nextViewId,
   webhooks,
   brand,
   ensureSessionId,
@@ -2303,8 +2341,8 @@ function SnapshotPage({
           <div className="print-hidden flex flex-col items-start gap-2 text-left lg:items-end lg:text-right">
             <p className="text-xs text-slate-400">{statusMessage}</p>
             <button
-              onClick={() => navTo("article")}
-              disabled={!allRequiredComplete}
+              onClick={() => nextViewId && navTo(nextViewId)}
+              disabled={!allRequiredComplete || !nextViewId}
               className="rounded-xl bg-[#f6c863] px-4 py-2 font-bold text-[#0b1020] transition hover:bg-[#f9d784] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Export Snapshot & Continue →
@@ -2602,6 +2640,7 @@ function ArticlePage({
   sendingArticle,
   sendArticleChange,
   navTo,
+  nextViewId,
   setN8N,
   webhooks,
   ensureSessionId,
@@ -2753,8 +2792,9 @@ function ArticlePage({
       </div>
       <div className="mt-10 flex justify-end">
         <button
-          onClick={() => navTo("social")}
-          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+          onClick={() => nextViewId && navTo(nextViewId)}
+          disabled={!nextViewId}
+          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Save & Continue →
         </button>
@@ -2772,6 +2812,7 @@ function ShortFormVideosPage({
   makeImages,
   makeNewsletters,
   navTo,
+  nextViewId,
   loadSocialSample,
   session,
 }) {
@@ -3063,7 +3104,9 @@ function ShortFormVideosPage({
       );
     }
     setSaving(false);
-    navTo("polls");
+    if (nextViewId) {
+      navTo(nextViewId);
+    }
   };
 
   return (
@@ -3292,7 +3335,7 @@ function ShortFormVideosPage({
           )}
           <button
             onClick={handleContinueSave}
-            disabled={saving}
+            disabled={saving || !nextViewId}
             className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {saving ? "Saving…" : "Continue & Save"}
@@ -3303,7 +3346,14 @@ function ShortFormVideosPage({
   );
 }
 
-function PollsPage({ social, setSocial, makePolls, loadSocialSample, navTo }) {
+function PollsPage({
+  social,
+  setSocial,
+  makePolls,
+  loadSocialSample,
+  navTo,
+  nextViewId,
+}) {
   const pollsList = useMemo(() => {
     const base = Array.isArray(social.polls) ? [...social.polls] : [];
     const filled = base.slice(0, 5);
@@ -3406,8 +3456,9 @@ function PollsPage({ social, setSocial, makePolls, loadSocialSample, navTo }) {
       </div>
       <div className="mt-6 flex justify-end">
         <button
-          onClick={() => navTo("images")}
-          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+          onClick={() => nextViewId && navTo(nextViewId)}
+          disabled={!nextViewId}
+          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Continue →
         </button>
@@ -3416,7 +3467,14 @@ function PollsPage({ social, setSocial, makePolls, loadSocialSample, navTo }) {
   );
 }
 
-function ImagePostsPage({ social, setSocial, makeImages, loadSocialSample, navTo }) {
+function ImagePostsPage({
+  social,
+  setSocial,
+  makeImages,
+  loadSocialSample,
+  navTo,
+  nextViewId,
+}) {
   const imagesList = useMemo(() => {
     const base = Array.isArray(social.images) ? [...social.images] : [];
     const filled = base.slice(0, 6);
@@ -3522,8 +3580,9 @@ function ImagePostsPage({ social, setSocial, makeImages, loadSocialSample, navTo
       </div>
       <div className="mt-6 flex justify-end">
         <button
-          onClick={() => navTo("podcast")}
-          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+          onClick={() => nextViewId && navTo(nextViewId)}
+          disabled={!nextViewId}
+          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Continue →
         </button>
@@ -3532,7 +3591,7 @@ function ImagePostsPage({ social, setSocial, makeImages, loadSocialSample, navTo
   );
 }
 
-function PodcastPage({ podcast, setPodcast, navTo }) {
+function PodcastPage({ podcast, setPodcast, navTo, nextViewId }) {
   return (
     <section className="min-h-screen px-[7vw] py-16">
       <header className="mb-4">
@@ -3566,8 +3625,9 @@ function PodcastPage({ podcast, setPodcast, navTo }) {
       </div>
       <div className="mt-6 flex justify-end">
         <button
-          onClick={() => navTo && navTo("planner")}
-          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+          onClick={() => nextViewId && navTo && navTo(nextViewId)}
+          disabled={!nextViewId}
+          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Open Planner →
         </button>
@@ -4025,17 +4085,78 @@ function ContentOSApp() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
-  // navigation (hash-style to keep canvas happy)
-  const getViewFromHash = () => {
-    if (typeof window === "undefined") return FLOW_ORDER[0];
+  const [contentPreferences, setContentPreferences] = useLocal(
+    "contentos.contentTypes",
+    createDefaultContentPreferences()
+  );
+
+  const activeViews = useMemo(() => {
+    const selected = new Set(
+      (contentPreferences ?? []).map((item) => item?.toLowerCase?.() ?? "")
+    );
+    return VIEW_DEFINITIONS.filter((view) => {
+      if (!view.preference) return true;
+      return selected.has(view.preference.toLowerCase());
+    });
+  }, [contentPreferences]);
+
+  const activeViewIds = useMemo(
+    () => activeViews.map((view) => view.id),
+    [activeViews]
+  );
+
+  const viewLabelMap = useMemo(() => {
+    const map = {};
+    activeViews.forEach((view) => {
+      map[view.id] = view.label;
+    });
+    return map;
+  }, [activeViews]);
+
+  const getViewFromHash = useCallback(() => {
+    const fallback = activeViewIds[0] ?? BASE_FLOW_ORDER[0];
+    if (typeof window === "undefined") return fallback;
     const hash = window.location?.hash
       ? window.location.hash.slice(1)
       : "";
     if (hash === "settings") return "settings";
-    return FLOW_ORDER.includes(hash) ? hash : FLOW_ORDER[0];
-  };
+    return activeViewIds.includes(hash) ? hash : fallback;
+  }, [activeViewIds]);
 
   const [view, setView] = useState(getViewFromHash);
+
+  const navTo = useCallback(
+    (target) => {
+      if (target === view) return;
+      if (view === "settings" && target !== "settings" && hasUnsavedSettings) {
+        const allow = window.confirm(
+          "You have unsaved settings. Leave without saving?"
+        );
+        if (!allow) {
+          try {
+            window.location.hash = "settings";
+          } catch {}
+          return;
+        }
+        setHasUnsavedSettings(false);
+      }
+
+      if (target !== "settings" && !activeViewIds.includes(target)) {
+        const fallback = activeViewIds[0];
+        if (fallback) {
+          window.location.hash = fallback;
+          setView(fallback);
+        }
+        return;
+      }
+
+      window.location.hash = target;
+      setView(target);
+    },
+    [view, hasUnsavedSettings, activeViewIds]
+  );
+
+  // navigation (hash-style to keep canvas happy)
   useEffect(() => {
     const onHash = () => {
       const nextView = getViewFromHash();
@@ -4053,24 +4174,7 @@ function ContentOSApp() {
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, [view, hasUnsavedSettings]);
-  const navTo = (v) => {
-    if (v === view) return;
-    if (view === "settings" && v !== "settings" && hasUnsavedSettings) {
-      const allow = window.confirm(
-        "You have unsaved settings. Leave without saving?"
-      );
-      if (!allow) {
-        try {
-          window.location.hash = "settings";
-        } catch {}
-        return;
-      }
-      setHasUnsavedSettings(false);
-    }
-    window.location.hash = v;
-    setView(v);
-  };
+  }, [view, hasUnsavedSettings, getViewFromHash]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -4083,6 +4187,25 @@ function ContentOSApp() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasUnsavedSettings]);
+
+  useEffect(() => {
+    if (view === "settings") return;
+    if (!activeViewIds.includes(view)) {
+      const fallback = activeViewIds[0];
+      if (fallback) {
+        navTo(fallback);
+      }
+    }
+  }, [view, activeViewIds, navTo]);
+
+  const getNextViewId = useCallback(
+    (currentId) => {
+      const index = activeViewIds.indexOf(currentId);
+      if (index === -1) return null;
+      return activeViewIds[index + 1] ?? null;
+    },
+    [activeViewIds]
+  );
 
   // state
   const [session, setSession] = useLocal("contentos.session", {
@@ -4110,10 +4233,6 @@ function ContentOSApp() {
     rows: [],
   });
   const [brand, setBrand] = useLocal("contentos.brand", createDefaultBrand());
-  const [contentPreferences, setContentPreferences] = useLocal(
-    "contentos.contentTypes",
-    createDefaultContentPreferences()
-  );
   const [topics, setTopics] = useLocal("contentos.topics", []);
   useEffect(() => {
     if (topics.length > 1) {
@@ -4846,40 +4965,27 @@ function ContentOSApp() {
     setShowNewBuildConfirm(true);
   };
 
-  const flow = FLOW_ORDER;
-  const steps = [
-    "Topic",
-    "Snapshot",
-    "Article",
-    "Short Form Videos",
-    "Polls",
-    "Image Posts",
-    "Podcast",
-    "Planner",
-  ];
-  const views = [
-    { id: "topics", label: "Topic", icon: Icon.List },
-    { id: "snapshot", label: "Delivery Snapshot", icon: Icon.Camera },
-    { id: "article", label: "Article", icon: Icon.Doc },
-    { id: "social", label: "Short Form Videos", icon: Icon.Video },
-    { id: "polls", label: "Polls", icon: Icon.Poll },
-    { id: "images", label: "Image Posts", icon: Icon.Image },
-    { id: "podcast", label: "Podcast Script", icon: Icon.Mic },
-    { id: "planner", label: "Planner", icon: Icon.Calendar },
-  ];
-  const currentIndex = useMemo(() => Math.max(0, flow.indexOf(view)), [view]);
+  const steps = useMemo(
+    () => activeViews.map((item) => item.stepLabel ?? item.label),
+    [activeViews]
+  );
+  const views = activeViews;
+  const currentIndex = useMemo(
+    () => Math.max(0, activeViewIds.indexOf(view)),
+    [view, activeViewIds]
+  );
 
   // sanity checks (dev only)
   useEffect(() => {
     try {
-      console.assert(steps.length === flow.length, "Steps mismatch");
+      console.assert(steps.length === activeViewIds.length, "Steps mismatch");
       const sample = parseCSV("a,b\n1,2");
       console.assert(
         sample.headers.length === 2 && sample.rows.length === 1,
         "CSV basic failed"
       );
     } catch {}
-  }, []);
+  }, [steps, activeViewIds]);
 
   return (
     <div
@@ -4936,17 +5042,9 @@ function ContentOSApp() {
               ☰ Menu
             </button>
             <div className="text-sm opacity-70">
-              {({
-                settings: "Settings",
-                topics: "Topic",
-                snapshot: "Delivery Snapshot",
-                article: "Article",
-                social: "Short Form Videos",
-                polls: "Polls",
-                images: "Image Posts",
-                podcast: "Podcast Script",
-                planner: "Planner",
-              })[view] ?? "ContentOS"}
+              {view === "settings"
+                ? "Settings"
+                : viewLabelMap[view] ?? "ContentOS"}
             </div>
           </div>
           <div className="flex items-center gap-2 text-slate-200/80">
@@ -5015,6 +5113,7 @@ function ContentOSApp() {
             snapshot={snapshot}
             setSnapshot={setSnapshot}
             navTo={navTo}
+            nextViewId={getNextViewId("snapshot")}
             webhooks={WEBHOOKS}
             brand={brand}
             ensureSessionId={ensureSessionId}
@@ -5032,6 +5131,7 @@ function ContentOSApp() {
             sendingArticle={sendingArticle}
             sendArticleChange={sendArticleChange}
             navTo={navTo}
+            nextViewId={getNextViewId("article")}
             setN8N={setN8N}
             webhooks={WEBHOOKS}
             ensureSessionId={ensureSessionId}
@@ -5047,6 +5147,7 @@ function ContentOSApp() {
             makeImages={makeImages}
             makeNewsletters={makeNewsletters}
             navTo={navTo}
+            nextViewId={getNextViewId("social")}
             loadSocialSample={() =>
               setSocial({
                 shorts: Array.from({ length: 10 }, (_, i) => ({
@@ -5137,6 +5238,7 @@ CTA: Save this and start.`,
               }))
             }
             navTo={navTo}
+            nextViewId={getNextViewId("polls")}
           />
         )}
         {view === "images" && (
@@ -5151,6 +5253,7 @@ CTA: Save this and start.`,
               }))
             }
             navTo={navTo}
+            nextViewId={getNextViewId("images")}
           />
         )}
         {view === "podcast" && (
@@ -5158,6 +5261,7 @@ CTA: Save this and start.`,
             podcast={podcast}
             setPodcast={setPodcast}
             navTo={navTo}
+            nextViewId={getNextViewId("podcast")}
           />
         )}
         {view === "planner" && (
