@@ -27,6 +27,7 @@ const LOCAL_STORAGE_KEYS = [
   "contentos.podcast",
   "contentos.social.design",
   "contentos.n8n",
+  "contentos.planner",
   TOPIC_ARCHIVE_STORAGE_KEY,
 ];
 
@@ -40,6 +41,202 @@ const createDefaultBrand = () => ({
 });
 
 const createDefaultContentPreferences = () => [];
+
+const createDefaultPlannerState = () => ({
+  events: [],
+  lastUpdatedAt: null,
+});
+
+const normalizePlannerState = (input) => {
+  if (!input) return createDefaultPlannerState();
+  if (Array.isArray(input)) {
+    return {
+      ...createDefaultPlannerState(),
+      events: input,
+    };
+  }
+  if (typeof input !== "object") {
+    return createDefaultPlannerState();
+  }
+  const base = {
+    ...createDefaultPlannerState(),
+    ...input,
+  };
+  base.events = Array.isArray(base.events) ? [...base.events] : [];
+  return base;
+};
+
+const getStartOfWeek = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + diff);
+  return d;
+};
+
+const PLANNER_TYPE_LABELS = {
+  article: "Article",
+  short: "Short Form Video",
+  poll: "Poll",
+  image: "Image Post",
+  newsletter: "Newsletter",
+  carousel: "Carousel",
+  podcast: "Podcast Script",
+};
+
+const summarizeText = (text, limit = 140) => {
+  if (!text) return "";
+  const clean = String(text)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return "";
+  if (clean.length <= limit) return clean;
+  return `${clean.slice(0, limit - 1)}…`;
+};
+
+const createPlannerLibraryItems = ({ topics, article, social, podcast }) => {
+  const items = [];
+  const primaryTopic = topics?.[0]?.name?.trim();
+
+  if (article) {
+    const summary = summarizeText(article.content, 180);
+    items.push({
+      id: "article",
+      type: "article",
+      typeLabel: PLANNER_TYPE_LABELS.article,
+      title: primaryTopic ? `${primaryTopic} Article` : "Article Draft",
+      subtitle: "Long-form article",
+      summary:
+        summary || "Draft ready for scheduling once the article is generated.",
+      metadata: { content: article.content || "" },
+    });
+  }
+
+  const shorts = social?.shorts || [];
+  shorts.forEach((short, index) => {
+    const summary = summarizeText(short?.script, 160);
+    items.push({
+      id: `short-${index}`,
+      type: "short",
+      typeLabel: PLANNER_TYPE_LABELS.short,
+      title: short?.title?.trim() || `Short #${index + 1}`,
+      subtitle:
+        summary || "Short-form script placeholder awaiting final polish.",
+      summary: summary,
+      metadata: {
+        title: short?.title || "",
+        script: short?.script || "",
+      },
+    });
+  });
+
+  const polls = social?.polls || [];
+  polls.forEach((poll, index) => {
+    const options = Array.isArray(poll?.options)
+      ? poll.options.filter((opt) => (opt || "").trim())
+      : [];
+    items.push({
+      id: `poll-${index}`,
+      type: "poll",
+      typeLabel: PLANNER_TYPE_LABELS.poll,
+      title: poll?.question?.trim() || `Poll #${index + 1}`,
+      subtitle: options.length
+        ? options.map((opt) => opt.trim()).join(" • ")
+        : "Poll options ready to customize.",
+      summary: summarizeText(poll?.question, 160),
+      metadata: {
+        question: poll?.question || "",
+        options,
+      },
+    });
+  });
+
+  const images = social?.images || [];
+  images.forEach((image, index) => {
+    items.push({
+      id: `image-${index}`,
+      type: "image",
+      typeLabel: PLANNER_TYPE_LABELS.image,
+      title: image?.caption?.trim() || `Image Post #${index + 1}`,
+      subtitle: image?.postCaption?.trim() || image?.alt?.trim() || "",
+      summary: summarizeText(image?.postCaption || image?.alt, 120),
+      metadata: {
+        caption: image?.caption || "",
+        alt: image?.alt || "",
+        postCaption: image?.postCaption || "",
+      },
+    });
+  });
+
+  const newsletters = social?.newsletters || [];
+  newsletters.forEach((newsletter, index) => {
+    const summary = summarizeText(newsletter?.body, 180);
+    items.push({
+      id: `newsletter-${index}`,
+      type: "newsletter",
+      typeLabel: PLANNER_TYPE_LABELS.newsletter,
+      title: newsletter?.subject?.trim() || `Newsletter #${index + 1}`,
+      subtitle:
+        summary || "Newsletter outline ready for expansion and scheduling.",
+      summary,
+      metadata: {
+        subject: newsletter?.subject || "",
+        body: newsletter?.body || "",
+      },
+    });
+  });
+
+  const carousels = social?.carousels || [];
+  carousels.forEach((carousel, index) => {
+    const slides = Array.isArray(carousel?.slides) ? carousel.slides : [];
+    const headings = slides
+      .map((slide) => slide?.heading?.trim())
+      .filter(Boolean);
+    items.push({
+      id: `carousel-${index}`,
+      type: "carousel",
+      typeLabel: PLANNER_TYPE_LABELS.carousel,
+      title: carousel?.title?.trim() || `Carousel #${index + 1}`,
+      subtitle: headings.length
+        ? headings.join(" • ")
+        : "Carousel slides ready to customize.",
+      summary: headings.join(" • "),
+      metadata: {
+        title: carousel?.title || "",
+        slides: slides.map((slide) => ({ ...slide })),
+      },
+    });
+  });
+
+  if (podcast) {
+    const summary = summarizeText(podcast?.outline, 200);
+    items.push({
+      id: "podcast",
+      type: "podcast",
+      typeLabel: PLANNER_TYPE_LABELS.podcast,
+      title: podcast?.title?.trim() || "Podcast Episode",
+      subtitle:
+        summary || "Outline ready for recording and scheduling.",
+      summary,
+      metadata: {
+        title: podcast?.title || "",
+        outline: podcast?.outline || "",
+      },
+    });
+  }
+
+  return items.map((item) => ({
+    ...item,
+    typeLabel: item.typeLabel || PLANNER_TYPE_LABELS[item.type] || item.type,
+    subtitle: item.subtitle ?? "",
+    summary: item.summary ?? "",
+  }));
+};
+
+const PLANNER_HOURS = [8, 10, 12, 14, 16, 18, 20];
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*>/i;
 
@@ -730,6 +927,8 @@ const WEBHOOKS = {
     "http://localhost:5678/webhook-test/50d7627b-9d24-4186-a974-9a09f7f84796",
   socialContinueSave:
     "http://localhost:5678/webhook-test/04461643-7c04-4fa6-a086-c58cbb9a2bcc",
+  plannerSchedule:
+    "http://localhost:5678/webhook-test/2e4f0e19-7d7e-4597-bb7c-6dd6c14b9d48",
 };
 
 const FLOW_ORDER = [
@@ -740,6 +939,7 @@ const FLOW_ORDER = [
   "polls",
   "images",
   "podcast",
+  "planner",
 ];
 
 const SAMPLE_POLLS = [
@@ -830,6 +1030,11 @@ const Icon = {
   Mic: (p) => (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
       <path d="M12 14a3 3 0 003-3V6a3 3 0 10-6 0v5a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2zM11 19h2v3h-2z" />
+    </svg>
+  ),
+  Calendar: (p) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}>
+      <path d="M7 2a1 1 0 011 1v1h8V3a1 1 0 112 0v1h1a3 3 0 013 3v12a3 3 0 01-3 3H5a3 3 0 01-3-3V7a3 3 0 013-3h1V3a1 1 0 112 0v1zm12 6H5v11a1 1 0 001 1h12a1 1 0 001-1zm-9 3h2v2H10zm4 0h2v2h-2zm-4 4h2v2H10zm4 0h2v2h-2z" />
     </svg>
   ),
   Settings: (p) => (
@@ -3323,7 +3528,7 @@ function ImagePostsPage({ social, setSocial, makeImages, loadSocialSample, navTo
   );
 }
 
-function PodcastPage({ podcast, setPodcast }) {
+function PodcastPage({ podcast, setPodcast, navTo }) {
   return (
     <section className="min-h-screen px-[7vw] py-16">
       <header className="mb-4">
@@ -3354,6 +3559,452 @@ function PodcastPage({ podcast, setPodcast }) {
         <pre className="mt-3 bg-[#0a0f22] border border-dashed border-[#2a3357] rounded-xl p-3 whitespace-pre-wrap">
           {JSON.stringify(podcast, null, 2)}
         </pre>
+      </div>
+      <div className="mt-6 flex justify-end">
+        <button
+          onClick={() => navTo && navTo("planner")}
+          className="bg-white text-[#0b1020] font-bold px-4 py-2 rounded-xl"
+        >
+          Open Planner →
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function PlannerPage({ items, events, setEvents }) {
+  const [filter, setFilter] = useState("all");
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const weekStart = useMemo(() => {
+    const start = getStartOfWeek(new Date());
+    start.setDate(start.getDate() + weekOffset * 7);
+    return start;
+  }, [weekOffset]);
+  const weekStartMs = weekStart.getTime();
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(weekStartMs);
+      date.setDate(date.getDate() + index);
+      return date;
+    });
+  }, [weekStartMs]);
+
+  const typeLabelMap = useMemo(() => {
+    const map = new Map();
+    items.forEach((item) => {
+      if (!map.has(item.type)) {
+        map.set(item.type, item.typeLabel || PLANNER_TYPE_LABELS[item.type] || item.type);
+      }
+    });
+    return map;
+  }, [items]);
+
+  const typeFilters = useMemo(() => {
+    const seen = new Set();
+    const ordered = [];
+    items.forEach((item) => {
+      if (!seen.has(item.type)) {
+        seen.add(item.type);
+        ordered.push(item.type);
+      }
+    });
+    return ["all", ...ordered];
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    if (filter === "all") return items;
+    return items.filter((item) => item.type === filter);
+  }, [filter, items]);
+
+  const scheduledByContent = useMemo(() => {
+    const map = new Map();
+    events.forEach((event) => {
+      if (!event?.contentId) return;
+      const list = map.get(event.contentId) || [];
+      list.push(event);
+      map.set(event.contentId, list);
+    });
+    return map;
+  }, [events]);
+
+  const libraryLookup = useMemo(() => {
+    const map = new Map();
+    items.forEach((item) => {
+      map.set(item.id, item);
+    });
+    return map;
+  }, [items]);
+
+  const sortEvents = useCallback((list) => {
+    return [...list].sort((a, b) => {
+      const aTime = new Date(a?.scheduledAt || 0).getTime();
+      const bTime = new Date(b?.scheduledAt || 0).getTime();
+      return aTime - bTime;
+    });
+  }, []);
+
+  const eventsForWeek = useMemo(() => {
+    const end = weekStartMs + MS_PER_DAY * 7;
+    return events.filter((event) => {
+      const date = new Date(event?.scheduledAt || 0);
+      const time = date.getTime();
+      return !Number.isNaN(time) && time >= weekStartMs && time < end;
+    });
+  }, [events, weekStartMs]);
+
+  const eventsBySlot = useMemo(() => {
+    const map = new Map();
+    eventsForWeek.forEach((event) => {
+      const date = new Date(event?.scheduledAt || 0);
+      const time = date.getTime();
+      if (Number.isNaN(time)) return;
+      const dayIndex = Math.floor((time - weekStartMs) / MS_PER_DAY);
+      const hour = date.getHours();
+      const key = `${dayIndex}-${hour}`;
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key).push(event);
+    });
+    return map;
+  }, [eventsForWeek, weekStartMs]);
+
+  const dayFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      }),
+    []
+  );
+  const rangeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+      }),
+    []
+  );
+
+  const weekRangeLabel = useMemo(() => {
+    if (!weekDays.length) return "";
+    const startLabel = rangeFormatter.format(weekDays[0]);
+    const endLabel = rangeFormatter.format(weekDays[weekDays.length - 1]);
+    return `${startLabel} – ${endLabel}`;
+  }, [rangeFormatter, weekDays]);
+
+  const formatHour = useCallback((hour) => {
+    const suffix = hour >= 12 ? "PM" : "AM";
+    const normalized = hour % 12 || 12;
+    return `${normalized} ${suffix}`;
+  }, []);
+
+  const handleLibraryDragStart = useCallback((event, item) => {
+    const payload = JSON.stringify({
+      source: "library",
+      contentId: item.id,
+    });
+    event.dataTransfer.effectAllowed = "copyMove";
+    event.dataTransfer.setData("application/json", payload);
+    event.dataTransfer.setData("text/plain", payload);
+  }, []);
+
+  const handleScheduledDragStart = useCallback((event, item) => {
+    const payload = JSON.stringify({
+      source: "scheduled",
+      scheduleId: item.id,
+    });
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/json", payload);
+    event.dataTransfer.setData("text/plain", payload);
+  }, []);
+
+  const handleDrop = useCallback(
+    (dayIndex, hour) => (event) => {
+      event.preventDefault();
+      const raw =
+        event.dataTransfer.getData("application/json") ||
+        event.dataTransfer.getData("text/plain");
+      if (!raw) return;
+      let payload;
+      try {
+        payload = JSON.parse(raw);
+      } catch (error) {
+        console.warn("Invalid drag payload", error);
+        return;
+      }
+
+      const slotDate = new Date(weekStartMs);
+      slotDate.setDate(slotDate.getDate() + dayIndex);
+      slotDate.setHours(hour, 0, 0, 0);
+
+      if (payload.source === "library") {
+        const libraryItem = libraryLookup.get(payload.contentId);
+        if (!libraryItem) return;
+        setEvents((prev) => {
+          const next = [
+            ...prev,
+            {
+              id: uuid(),
+              contentId: libraryItem.id,
+              type: libraryItem.type,
+              title: libraryItem.title,
+              subtitle: libraryItem.subtitle,
+              scheduledAt: slotDate.toISOString(),
+              createdAt: new Date().toISOString(),
+            },
+          ];
+          return sortEvents(next);
+        });
+      } else if (payload.source === "scheduled") {
+        const scheduleId = payload.scheduleId;
+        if (!scheduleId) return;
+        setEvents((prev) => {
+          let changed = false;
+          const next = prev.map((item) => {
+            if (item.id !== scheduleId) return item;
+            changed = true;
+            return {
+              ...item,
+              scheduledAt: slotDate.toISOString(),
+            };
+          });
+          if (!changed) return prev;
+          return sortEvents(next);
+        });
+      }
+    },
+    [libraryLookup, setEvents, sortEvents, weekStartMs]
+  );
+
+  const handleRemove = useCallback(
+    (id) => {
+      setEvents((prev) => prev.filter((event) => event.id !== id));
+    },
+    [setEvents]
+  );
+
+  const filterLabel = useCallback(
+    (value) => {
+      if (value === "all") return "All";
+      return typeLabelMap.get(value) || value;
+    },
+    [typeLabelMap]
+  );
+
+  return (
+    <section className="min-h-screen px-[7vw] py-16">
+      <header className="mb-6">
+        <h2 className="text-2xl font-semibold">Planner</h2>
+        <p className="mt-1 text-sm text-slate-300">
+          Drag any generated asset into the calendar to lock in a publish date.
+          Move scheduled items to reschedule them.
+        </p>
+      </header>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className="bg-[#121629] border border-[#1f2744] rounded-2xl p-4 flex flex-col min-h-[480px]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold">Content Library</h3>
+              <p className="text-xs text-slate-400">
+                {items.length
+                  ? "Filter and drag items onto the planner"
+                  : "Content will appear here after generation"}
+              </p>
+            </div>
+            <div className="text-xs text-slate-400">
+              Drag to schedule →
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {typeFilters.map((value) => (
+              <button
+                key={value}
+                onClick={() => setFilter(value)}
+                className={`px-3 py-1 rounded-full border text-sm transition ${
+                  filter === value
+                    ? "bg-white text-[#0b1020] border-white"
+                    : "border-[#2a3357] text-slate-300 hover:bg-[#151a32]"
+                }`}
+              >
+                {filterLabel(value)}
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {filteredItems.length === 0 && (
+              <div className="col-span-full text-sm text-slate-400 border border-dashed border-[#2a3357] rounded-xl p-4">
+                No items match this filter yet.
+              </div>
+            )}
+            {filteredItems.map((item) => {
+              const scheduled = scheduledByContent.get(item.id) || [];
+              return (
+                <div
+                  key={item.id}
+                  draggable
+                  onDragStart={(event) => handleLibraryDragStart(event, item)}
+                  className="bg-[#0f1427] border border-[#1f2744] rounded-xl p-4 cursor-grab active:cursor-grabbing transition hover:border-[#3d4b7a]"
+                >
+                  <div className="flex items-center justify-between gap-2 text-xs uppercase tracking-wide text-slate-400">
+                    <span>{item.typeLabel}</span>
+                    {scheduled.length > 0 && (
+                      <span className="bg-[#1f2744] text-slate-200 px-2 py-0.5 rounded-full">
+                        Scheduled ×{scheduled.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 text-base font-semibold text-slate-100">
+                    {item.title}
+                  </div>
+                  {item.subtitle && (
+                    <div
+                      className="mt-1 text-sm text-slate-300"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {item.subtitle}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-[#121629] border border-[#1f2744] rounded-2xl p-4 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold">Weekly Calendar</h3>
+              <p className="text-xs text-slate-400">{weekRangeLabel}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setWeekOffset((value) => value - 1)}
+                className="px-2 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
+              >
+                ← Prev
+              </button>
+              <button
+                onClick={() => setWeekOffset(0)}
+                className="px-2 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
+              >
+                This Week
+              </button>
+              <button
+                onClick={() => setWeekOffset((value) => value + 1)}
+                className="px-2 py-1 rounded-lg border border-[#2a3357] hover:bg-[#151a32]"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <div className="min-w-[720px]">
+              <div
+                className="grid text-sm"
+                style={{
+                  gridTemplateColumns: `90px repeat(${weekDays.length}, minmax(0, 1fr))`,
+                }}
+              >
+                <div className="border-b border-[#1f2744]" />
+                {weekDays.map((day, index) => (
+                  <div
+                    key={index}
+                    className="border-b border-[#1f2744] px-2 py-2 text-center text-slate-300"
+                  >
+                    {dayFormatter.format(day)}
+                  </div>
+                ))}
+                {PLANNER_HOURS.map((hour) => (
+                  <React.Fragment key={hour}>
+                    <div className="border-r border-[#1f2744] px-2 py-3 text-right text-slate-400">
+                      {formatHour(hour)}
+                    </div>
+                    {weekDays.map((_, dayIndex) => {
+                      const slotKey = `${dayIndex}-${hour}`;
+                      const slotEvents = eventsBySlot.get(slotKey) || [];
+                      return (
+                        <div
+                          key={slotKey}
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = "move";
+                          }}
+                          onDrop={handleDrop(dayIndex, hour)}
+                          className="min-h-[88px] border border-[#1f2744] border-l-0 border-t-0 px-2 py-2 align-top"
+                        >
+                          {slotEvents.length === 0 && (
+                            <div className="h-full w-full rounded-lg border border-dashed border-[#273052] text-[11px] text-slate-500 grid place-items-center py-2">
+                              Drop to schedule
+                            </div>
+                          )}
+                          <div className="flex flex-col gap-2">
+                            {slotEvents.map((eventItem) => {
+                              const libraryItem = libraryLookup.get(eventItem.contentId);
+                              const title = libraryItem?.title || eventItem.title;
+                              const subtitle = libraryItem?.subtitle || eventItem.subtitle;
+                              const typeLabel = libraryItem?.typeLabel || PLANNER_TYPE_LABELS[eventItem.type] || eventItem.type;
+                              return (
+                                <div
+                                  key={eventItem.id}
+                                  draggable
+                                  onDragStart={(dragEvent) =>
+                                    handleScheduledDragStart(dragEvent, eventItem)
+                                  }
+                                  className="bg-[#0f1427] border border-[#273052] rounded-lg p-3 cursor-grab active:cursor-grabbing shadow-sm"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                      <div className="text-xs uppercase tracking-wide text-slate-400">
+                                        {typeLabel}
+                                      </div>
+                                      <div className="text-sm font-semibold text-slate-100">
+                                        {title}
+                                      </div>
+                                      {subtitle && (
+                                        <div
+                                          className="mt-1 text-xs text-slate-300"
+                                          style={{
+                                            display: "-webkit-box",
+                                            WebkitLineClamp: 2,
+                                            WebkitBoxOrient: "vertical",
+                                            overflow: "hidden",
+                                          }}
+                                        >
+                                          {subtitle}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={(clickEvent) => {
+                                        clickEvent.stopPropagation();
+                                        handleRemove(eventItem.id);
+                                      }}
+                                      className="text-xs text-slate-400 hover:text-slate-200"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -3543,10 +4194,52 @@ function ContentOSApp() {
     newsletters: makeNewsletters(),
     questions: [],
   });
+  const [plannerSchedule, setPlannerSchedule] = useLocal(
+    "contentos.planner",
+    createDefaultPlannerState()
+  );
+  const plannerState = useMemo(
+    () => normalizePlannerState(plannerSchedule),
+    [plannerSchedule]
+  );
+  const plannerEvents = plannerState.events;
+  const updatePlannerEvents = useCallback(
+    (updater) => {
+      setPlannerSchedule((prev) => {
+        const base = normalizePlannerState(prev);
+        const nextEvents =
+          typeof updater === "function" ? updater(base.events) : updater;
+        return {
+          ...base,
+          events: Array.isArray(nextEvents) ? [...nextEvents] : [],
+          lastUpdatedAt: new Date().toISOString(),
+        };
+      });
+    },
+    [setPlannerSchedule]
+  );
+  const plannerLibraryItems = useMemo(
+    () =>
+      createPlannerLibraryItems({
+        topics,
+        article,
+        social,
+        podcast,
+      }),
+    [topics, article, social, podcast]
+  );
+  const plannerLibraryLookup = useMemo(() => {
+    const map = new Map();
+    plannerLibraryItems.forEach((item) => {
+      map.set(item.id, item);
+    });
+    return map;
+  }, [plannerLibraryItems]);
 
   const [archives, setArchives] = useLocal(TOPIC_ARCHIVE_STORAGE_KEY, []);
   const [activeArchiveId, setActiveArchiveId] = useState(null);
   const archiveSyncRef = useRef(null);
+  const plannerSyncRef = useRef(false);
 
   const persistSessionToArchive = useCallback(
     ({ entryId, dataOverride } = {}) => {
@@ -3561,6 +4254,7 @@ function ContentOSApp() {
           article,
           podcast,
           social,
+          planner: normalizePlannerState(plannerSchedule),
           refdata,
           n8n,
           locks,
@@ -3617,6 +4311,7 @@ function ContentOSApp() {
       article,
       podcast,
       social,
+      plannerSchedule,
       refdata,
       n8n,
       locks,
@@ -3652,6 +4347,43 @@ function ContentOSApp() {
     if (session.id) return session.id;
     return startNewSession();
   }, [session.id, startNewSession]);
+
+  useEffect(() => {
+    if (!WEBHOOKS.plannerSchedule) return;
+    if (!plannerSyncRef.current) {
+      plannerSyncRef.current = true;
+      return;
+    }
+    const eventsPayload = plannerEvents.map((event) => {
+      const libraryItem = plannerLibraryLookup.get(event.contentId);
+      return {
+        id: event.id,
+        contentId: event.contentId,
+        scheduledAt: event.scheduledAt,
+        type: event.type || libraryItem?.type || "",
+        title: libraryItem?.title || event.title || "",
+        subtitle: libraryItem?.subtitle || event.subtitle || "",
+        metadata: libraryItem?.metadata,
+      };
+    });
+    (async () => {
+      try {
+        const ok = await postWebhook(
+          WEBHOOKS.plannerSchedule,
+          "planner_schedule_updated",
+          {
+            sessionId: ensureSessionId(),
+            events: eventsPayload,
+          }
+        );
+        if (!ok) {
+          console.error("Planner schedule webhook responded with non-200");
+        }
+      } catch (error) {
+        console.error("Planner schedule webhook failed:", error);
+      }
+    })();
+  }, [plannerEvents, plannerLibraryLookup, ensureSessionId]);
 
   const handleRestoreArchive = useCallback(
     (entryId) => {
@@ -3695,6 +4427,9 @@ function ContentOSApp() {
           questions: [],
         }
       );
+      setPlannerSchedule(
+        data.planner ? normalizePlannerState(data.planner) : createDefaultPlannerState()
+      );
       setRefdata(data.refdata || { headers: [], rows: [] });
       setN8N(data.n8n || { webhook: "" });
       setLocks(data.locks || { brand: false });
@@ -3731,6 +4466,7 @@ function ContentOSApp() {
       makeCarousels,
       makeImages,
       makeNewsletters,
+      setPlannerSchedule,
     ]
   );
 
@@ -3758,6 +4494,7 @@ function ContentOSApp() {
       article,
       podcast,
       social,
+      planner: normalizePlannerState(plannerSchedule),
       refdata,
       n8n,
       locks,
@@ -3783,6 +4520,7 @@ function ContentOSApp() {
     refdata,
     n8n,
     locks,
+    plannerSchedule,
     persistSessionToArchive,
   ]);
 
@@ -4081,6 +4819,7 @@ function ContentOSApp() {
       images: makeImages(),
       newsletters: makeNewsletters(),
     });
+    setPlannerSchedule(createDefaultPlannerState());
     setN8N({ webhook: "" });
     setRefdata({ headers: [], rows: [] });
     setView("topics");
@@ -4112,6 +4851,7 @@ function ContentOSApp() {
     "Polls",
     "Image Posts",
     "Podcast",
+    "Planner",
   ];
   const views = [
     { id: "topics", label: "Topic", icon: Icon.List },
@@ -4121,6 +4861,7 @@ function ContentOSApp() {
     { id: "polls", label: "Polls", icon: Icon.Poll },
     { id: "images", label: "Image Posts", icon: Icon.Image },
     { id: "podcast", label: "Podcast Script", icon: Icon.Mic },
+    { id: "planner", label: "Planner", icon: Icon.Calendar },
   ];
   const currentIndex = useMemo(() => Math.max(0, flow.indexOf(view)), [view]);
 
@@ -4200,6 +4941,7 @@ function ContentOSApp() {
                 polls: "Polls",
                 images: "Image Posts",
                 podcast: "Podcast Script",
+                planner: "Planner",
               })[view] ?? "ContentOS"}
             </div>
           </div>
@@ -4406,7 +5148,18 @@ CTA: Save this and start.`,
           />
         )}
         {view === "podcast" && (
-          <PodcastPage podcast={podcast} setPodcast={setPodcast} />
+          <PodcastPage
+            podcast={podcast}
+            setPodcast={setPodcast}
+            navTo={navTo}
+          />
+        )}
+        {view === "planner" && (
+          <PlannerPage
+            items={plannerLibraryItems}
+            events={plannerEvents}
+            setEvents={updatePlannerEvents}
+          />
         )}
         {showWelcome && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#06091a]/70 backdrop-blur-sm">
