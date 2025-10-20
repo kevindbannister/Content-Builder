@@ -2,6 +2,51 @@ const DEFAULT_SNAPSHOT_ENDPOINT =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_N8N_SNAPSHOT_URL) ||
   "/api/n8n/snapshot";
 
+const SNAPSHOT_SECTION_KEYS = [
+  "problem",
+  "model",
+  "metaphor",
+  "caseStat",
+  "actionSteps",
+  "oneLiner",
+];
+
+export function mapSections(payload = {}) {
+  const ds = payload?.deliverySnapshotUpdate;
+  const sections = Array.isArray(ds?.sections) ? ds.sections : [];
+
+  const byKey = sections.reduce(
+    (acc, section) => {
+      const key = section?.key;
+      if (SNAPSHOT_SECTION_KEYS.includes(key)) {
+        acc[key] = (section?.content || "").trim();
+      }
+      return acc;
+    },
+    {
+      problem: "",
+      model: "",
+      metaphor: "",
+      caseStat: "",
+      actionSteps: "",
+      oneLiner: "",
+    }
+  );
+
+  return {
+    archetype: ds?.archetype ?? "",
+    topic: ds?.topic ?? "",
+    problem: byKey.problem,
+    model: byKey.model,
+    metaphor: byKey.metaphor,
+    caseStat: byKey.caseStat,
+    actionSteps: byKey.actionSteps,
+    oneLiner: byKey.oneLiner,
+    articleText: payload?.messageReply?.text ?? "",
+    articleHtml: payload?.messageReply?.html ?? "",
+  };
+}
+
 async function readJsonResponse(response) {
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
@@ -38,5 +83,7 @@ export async function postSnapshot(payload, options = {}) {
     throw error;
   }
 
-  return readJsonResponse(response);
+  const data = await readJsonResponse(response);
+  if (!data) return mapSections({});
+  return mapSections(data);
 }
