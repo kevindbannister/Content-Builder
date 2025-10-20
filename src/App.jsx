@@ -610,6 +610,13 @@ const SNAPSHOT_FIELD_KEYS = [
   "oneLiner",
 ];
 
+const SNAPSHOT_WEBHOOK_KEY_PREFIXES = [
+  "",
+  "ds_",
+  "snapshot_",
+  "delivery_snapshot_",
+];
+
 const SNAPSHOT_CANONICAL_KEY_LOOKUP = {
   problem: "problem",
   model: "model",
@@ -626,6 +633,23 @@ const SNAPSHOT_CANONICAL_KEY_LOOKUP = {
   oneliner: "oneLiner",
   oneline: "oneLiner",
   topic: "topic",
+};
+
+const createSnapshotWebhookExample = () => {
+  const example = {
+    deliverySnapshotUpdate: {
+      topic: "Launch Warmup Revamp",
+      sections: SNAPSHOT_SECTION_DEFINITIONS.map((definition) => ({
+        id: definition.id,
+        content: `<${definition.title} copy>`,
+      })),
+    },
+    snapshot: {
+      problem: "Optional direct key for Problem section.",
+      model: "Optional direct key for Model section.",
+    },
+  };
+  return JSON.stringify(example, null, 2);
 };
 
 function canonicalSnapshotKey(key) {
@@ -2742,6 +2766,32 @@ function SnapshotPage({
     ? "All sections are ready to export."
     : "Complete each section to unlock export and send.";
 
+  const snapshotWebhookExample = useMemo(createSnapshotWebhookExample, []);
+
+  const snapshotWebhookKeyExamples = useMemo(() => {
+    const extras = {
+      caseStat: ["case_stat", "case_stats", "case_study"],
+      actionSteps: ["action_steps", "action_plan"],
+      oneLiner: ["one_liner", "one_line"],
+    };
+    return SNAPSHOT_SECTION_DEFINITIONS.reduce((acc, definition) => {
+      const id = definition.id;
+      const hints = new Set();
+      SNAPSHOT_WEBHOOK_KEY_PREFIXES.forEach((prefix) => {
+        hints.add(`${prefix}${id}`);
+      });
+      if (extras[id]) {
+        extras[id].forEach((variant) => {
+          SNAPSHOT_WEBHOOK_KEY_PREFIXES.forEach((prefix) => {
+            hints.add(`${prefix}${variant}`);
+          });
+        });
+      }
+      acc[id] = Array.from(hints);
+      return acc;
+    }, {});
+  }, []);
+
   return (
     <>
       <ToastOverlay toast={toast} />
@@ -2812,6 +2862,57 @@ function SnapshotPage({
       <div className="flex flex-col gap-6 lg:flex-row">
         <aside className="print-hidden lg:w-80 lg:flex-shrink-0">
           <div className="flex flex-col gap-5 lg:sticky lg:top-24">
+            <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
+                Webhook payload guide
+              </h3>
+              <p className="mt-3 text-xs leading-relaxed text-slate-300">
+                Respond with multiple fields by sending any combination of these keys. You can
+                mix direct keys (e.g.&nbsp;
+                <code>problem</code>) and section objects in&nbsp;
+                <code>deliverySnapshotUpdate.sections</code>.
+              </p>
+              <div className="mt-4 space-y-3">
+                {SNAPSHOT_SECTION_DEFINITIONS.map((definition) => {
+                  const webhookExamples = snapshotWebhookKeyExamples[definition.id] ?? [];
+                  return (
+                    <div key={definition.id} className="rounded-xl border border-[#2a3357] bg-[#0f1427] p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+                          {definition.title}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-300">
+                          Primary key <code>{definition.id}</code>
+                        </p>
+                      </div>
+                      <code className="rounded bg-[#121629] px-2 py-1 text-[11px] text-slate-300">
+                        {definition.id}
+                      </code>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                      Examples:&nbsp;
+                      {webhookExamples.slice(0, 4).map((example, index) => (
+                        <span key={example}>
+                          <code>{example}</code>
+                          {index < Math.min(webhookExamples.length, 4) - 1 ? <span>, </span> : null}
+                        </span>
+                      ))}
+                      {webhookExamples.length > 4 ? "…" : null}
+                    </p>
+                  </div>
+                );
+                })}
+              </div>
+              <div className="mt-4">
+                <p className="text-[11px] text-slate-400">
+                  Sample webhook response updating several fields at once:
+                </p>
+                <pre className="mt-2 max-h-64 overflow-auto rounded-xl border border-dashed border-[#2a3357] bg-[#0a0f22] p-3 text-[11px] leading-relaxed text-slate-300">
+                  {snapshotWebhookExample}
+                </pre>
+              </div>
+            </div>
             <div className="rounded-2xl border border-[#232941] bg-[#121629] p-5">
               <h3 className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
                 Section status
@@ -2907,6 +3008,23 @@ function SnapshotPage({
                           <h3 className="text-xl font-bold text-slate-50">
                             {definition.title}
                           </h3>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-[#2a3357] bg-[#0f1427] px-2 py-1 font-semibold uppercase tracking-[0.2em]">
+                              Field
+                              <code className="text-[11px] font-normal">{definition.id}</code>
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-[#2a3357] bg-[#0f1427] px-2 py-1 text-[11px]">
+                              Try keys:&nbsp;
+                              {(snapshotWebhookKeyExamples[definition.id] ?? [])
+                                .slice(0, 2)
+                                .map((example, index) => (
+                                  <span key={example}>
+                                    <code>{example}</code>
+                                    {index === 0 ? "/" : null}
+                                  </span>
+                                ))}
+                            </span>
+                          </div>
                           {definition.helper && (
                             <p className="text-sm text-slate-400">
                               {definition.helper}
