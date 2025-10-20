@@ -7,10 +7,10 @@ type SectionKey =
   | "oneLiner";
 
 interface Section {
-  key: SectionKey;
-  title: string;
-  content: string;
-  order: number;
+  key?: string;
+  title?: string;
+  content?: string;
+  order?: number;
 }
 
 interface Payload {
@@ -23,48 +23,30 @@ interface Payload {
 }
 
 export function mapSections(payload: Payload) {
-  const ds = payload?.deliverySnapshotUpdate;
-  const secs = Array.isArray(ds?.sections) ? ds!.sections : [];
+  const ds = payload?.deliverySnapshotUpdate ?? {};
+  const secs = Array.isArray(ds.sections) ? ds.sections : [];
 
-  // Canonical keys we expect (in order)
-  const wanted: SectionKey[] = [
-    "problem",
-    "model",
-    "metaphor",
-    "caseStat",
-    "actionSteps",
-    "oneLiner",
-  ];
+  const byKey: Record<string, string> = {};
+  for (const section of secs) {
+    if (!section || typeof section !== "object") continue;
+    const key = typeof section.key === "string" ? section.key : undefined;
+    if (!key) continue;
+    const content =
+      typeof section.content === "string" ? section.content.trim() : "";
+    byKey[key] = content;
+  }
 
-  // Build a map for fast lookup
-  const byKey = secs.reduce<Record<SectionKey, string>>(
-    (acc, s) => {
-      const k = s?.key as SectionKey;
-      if (wanted.includes(k)) acc[k] = (s?.content || "").trim();
-      return acc;
-    },
-    {
-      problem: "",
-      model: "",
-      metaphor: "",
-      caseStat: "",
-      actionSteps: "",
-      oneLiner: "",
-    }
-  );
+  const getValue = (key: SectionKey) => byKey[key] ?? "";
 
   return {
-    archetype: ds?.archetype ?? "",
-    topic: ds?.topic ?? "",
-    problem: byKey.problem,
-    model: byKey.model,
-    metaphor: byKey.metaphor,
-    caseStat: byKey.caseStat,
-    actionSteps: byKey.actionSteps,
-    oneLiner: byKey.oneLiner,
-    // optional: if you want the full article too
-    articleText: payload?.messageReply?.text ?? "",
-    articleHtml: payload?.messageReply?.html ?? "",
+    archetype: typeof ds.archetype === "string" ? ds.archetype : "",
+    topic: typeof ds.topic === "string" ? ds.topic : "",
+    problem: getValue("problem"),
+    model: getValue("model"),
+    metaphor: getValue("metaphor"),
+    caseStat: getValue("caseStat"),
+    actionSteps: getValue("actionSteps"),
+    oneLiner: getValue("oneLiner"),
   };
 }
 

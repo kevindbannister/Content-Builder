@@ -2,48 +2,31 @@ const DEFAULT_SNAPSHOT_ENDPOINT =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_N8N_SNAPSHOT_URL) ||
   "/api/n8n/snapshot";
 
-const SNAPSHOT_SECTION_KEYS = [
-  "problem",
-  "model",
-  "metaphor",
-  "caseStat",
-  "actionSteps",
-  "oneLiner",
-];
-
 export function mapSections(payload = {}) {
-  const ds = payload?.deliverySnapshotUpdate;
-  const sections = Array.isArray(ds?.sections) ? ds.sections : [];
+  const ds = payload?.deliverySnapshotUpdate ?? {};
+  const sections = Array.isArray(ds.sections) ? ds.sections : [];
 
-  const byKey = sections.reduce(
-    (acc, section) => {
-      const key = section?.key;
-      if (SNAPSHOT_SECTION_KEYS.includes(key)) {
-        acc[key] = (section?.content || "").trim();
-      }
-      return acc;
-    },
-    {
-      problem: "",
-      model: "",
-      metaphor: "",
-      caseStat: "",
-      actionSteps: "",
-      oneLiner: "",
-    }
-  );
+  const byKey = {};
+  for (const section of sections) {
+    if (!section || typeof section !== "object") continue;
+    const key = typeof section.key === "string" ? section.key : undefined;
+    if (!key) continue;
+    const content =
+      typeof section.content === "string" ? section.content.trim() : "";
+    byKey[key] = content;
+  }
+
+  const getValue = (key) => byKey[key] ?? "";
 
   return {
-    archetype: ds?.archetype ?? "",
-    topic: ds?.topic ?? "",
-    problem: byKey.problem,
-    model: byKey.model,
-    metaphor: byKey.metaphor,
-    caseStat: byKey.caseStat,
-    actionSteps: byKey.actionSteps,
-    oneLiner: byKey.oneLiner,
-    articleText: payload?.messageReply?.text ?? "",
-    articleHtml: payload?.messageReply?.html ?? "",
+    archetype: typeof ds.archetype === "string" ? ds.archetype : "",
+    topic: typeof ds.topic === "string" ? ds.topic : "",
+    problem: getValue("problem"),
+    model: getValue("model"),
+    metaphor: getValue("metaphor"),
+    caseStat: getValue("caseStat"),
+    actionSteps: getValue("actionSteps"),
+    oneLiner: getValue("oneLiner"),
   };
 }
 
