@@ -18,15 +18,46 @@ export function mapSections(payload = {}) {
 
   const getValue = (key) => byKey[key] ?? "";
 
+  const FLAT_FIELD_MAP = {
+    archetype: ["ds_archetype", "archetype"],
+    topic: ["ds_topic", "topic"],
+    problem: ["ds_problem", "problem"],
+    model: ["ds_model", "model"],
+    metaphor: ["ds_metaphor", "metaphor"],
+    caseStat: ["ds_case_stat", "caseStat", "case_stat"],
+    actionSteps: ["ds_action_steps", "actionSteps", "action_steps"],
+    oneLiner: ["ds_oneliner", "oneLiner", "oneliner"],
+  };
+
+  const sources = [ds, payload?.snapshot, payload];
+
+  const readFlatField = (field) => {
+    const keys = FLAT_FIELD_MAP[field] ?? [];
+    for (const source of sources) {
+      if (!source || typeof source !== "object") continue;
+      for (const key of keys) {
+        if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+        const raw = source[key];
+        if (typeof raw === "string") return raw;
+        if (raw == null) return "";
+        return String(raw);
+      }
+    }
+    return undefined;
+  };
+
   return {
-    archetype: typeof ds.archetype === "string" ? ds.archetype : "",
-    topic: typeof ds.topic === "string" ? ds.topic : "",
-    problem: getValue("problem"),
-    model: getValue("model"),
-    metaphor: getValue("metaphor"),
-    caseStat: getValue("caseStat"),
-    actionSteps: getValue("actionSteps"),
-    oneLiner: getValue("oneLiner"),
+    archetype:
+      readFlatField("archetype") ??
+      (typeof ds.archetype === "string" ? ds.archetype : ""),
+    topic:
+      readFlatField("topic") ?? (typeof ds.topic === "string" ? ds.topic : ""),
+    problem: readFlatField("problem") ?? getValue("problem"),
+    model: readFlatField("model") ?? getValue("model"),
+    metaphor: readFlatField("metaphor") ?? getValue("metaphor"),
+    caseStat: readFlatField("caseStat") ?? getValue("caseStat"),
+    actionSteps: readFlatField("actionSteps") ?? getValue("actionSteps"),
+    oneLiner: readFlatField("oneLiner") ?? getValue("oneLiner"),
   };
 }
 

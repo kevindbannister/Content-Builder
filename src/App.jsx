@@ -9,7 +9,7 @@ import React, {
 import { postSnapshot } from "@/lib/n8n";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.25.10";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.25.11";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -2323,7 +2323,7 @@ function SnapshotPage({
 
   useEffect(() => {
     const sectionMap = new Map();
-    if (Array.isArray(snapshotProp.sections)) {
+    if (Array.isArray(snapshotProp?.sections)) {
       snapshotProp.sections.forEach((section) => {
         if (!section || typeof section.id !== "string") return;
         sectionMap.set(
@@ -2332,28 +2332,56 @@ function SnapshotPage({
         );
       });
     }
+    const flatValues = extractSnapshotFromObject(snapshotProp) ?? {};
     const topicFromTopics = topics?.[0]?.name ?? "";
     setSnapshot((prev) => {
       let changed = false;
       const next = { ...prev };
       SNAPSHOT_FIELD_KEYS.forEach((key) => {
-        const value = sectionMap.get(key) ?? "";
+        const sectionValue = sectionMap.get(key) ?? "";
+        const hasFlatValue = Object.prototype.hasOwnProperty.call(
+          flatValues,
+          key
+        );
+        const flatValue = hasFlatValue
+          ? typeof flatValues[key] === "string"
+            ? flatValues[key]
+            : flatValues[key] == null
+            ? ""
+            : String(flatValues[key])
+          : undefined;
+        const value = hasFlatValue ? flatValue : sectionValue;
         if (value !== prev[key]) {
           next[key] = value;
           changed = true;
         }
       });
-      const topicValue =
-        typeof snapshotProp.topic === "string" && snapshotProp.topic
-          ? snapshotProp.topic
-          : prev.topic || topicFromTopics;
+      const hasFlatTopic = Object.prototype.hasOwnProperty.call(
+        flatValues,
+        "topic"
+      );
+      let topicValue;
+      if (hasFlatTopic) {
+        const raw = flatValues.topic;
+        topicValue =
+          typeof raw === "string" ? raw : raw == null ? "" : String(raw);
+      } else if (
+        typeof snapshotProp?.topic === "string" &&
+        snapshotProp.topic
+      ) {
+        topicValue = snapshotProp.topic;
+      } else if (prev.topic) {
+        topicValue = prev.topic;
+      } else {
+        topicValue = topicFromTopics ?? "";
+      }
       if (topicValue !== prev.topic) {
-        next.topic = topicValue ?? "";
+        next.topic = topicValue;
         changed = true;
       }
       return changed ? next : prev;
     });
-  }, [snapshotProp.sections, snapshotProp.topic, topics]);
+  }, [snapshotProp, topics]);
 
   const sectionsWithMeta = useMemo(() => {
     const baseSections =
