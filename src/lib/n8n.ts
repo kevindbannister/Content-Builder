@@ -60,5 +60,8 @@ export async function postSnapshot(payload: any) {
   });
   if (!res.ok) throw new Error(`n8n failed: ${res.status}`);
   const data = await res.json();
-  return mapSections(data);
+  if (!data || typeof data !== "object") {
+    return {};
+  }
+  return data as any;
 }

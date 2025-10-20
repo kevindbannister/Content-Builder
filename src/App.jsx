@@ -9,7 +9,7 @@ import React, {
 import { postSnapshot } from "@/lib/n8n";
 
 const APP_VERSION =
-  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.25.11";
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.25.12";
 const VERSION_STORAGE_KEY = "contentos.version";
 const SETTINGS_STORAGE_KEYS = [
   "contentos.brand",
@@ -610,6 +610,19 @@ const SNAPSHOT_FIELD_KEYS = [
   "oneLiner",
 ];
 
+const SNAPSHOT_FLAT_FIELD_VARIANTS = {
+  archetype: ["ds_archetype", "archetype"],
+  topic: ["ds_topic", "topic"],
+  problem: ["ds_problem", "problem"],
+  model: ["ds_model", "model"],
+  metaphor: ["ds_metaphor", "metaphor"],
+  caseStat: ["ds_case_stat", "case_stat", "caseStat"],
+  actionSteps: ["ds_action_steps", "action_steps", "actionSteps"],
+  oneLiner: ["ds_oneliner", "ds_one_liner", "one_liner", "oneLiner", "oneliner"],
+};
+
+const SNAPSHOT_FLAT_KEYS = ["archetype", "topic", ...SNAPSHOT_FIELD_KEYS];
+
 const SNAPSHOT_WEBHOOK_KEY_PREFIXES = [
   "",
   "ds_",
@@ -618,6 +631,7 @@ const SNAPSHOT_WEBHOOK_KEY_PREFIXES = [
 ];
 
 const SNAPSHOT_CANONICAL_KEY_LOOKUP = {
+  archetype: "archetype",
   problem: "problem",
   model: "model",
   metaphor: "metaphor",
@@ -710,6 +724,11 @@ function extractSnapshotFromSections(sections) {
       found = true;
       return;
     }
+    if (canonical === "archetype") {
+      result.archetype = value;
+      found = true;
+      return;
+    }
     if (!SNAPSHOT_FIELD_KEYS.includes(canonical)) return;
     result[canonical] = value;
     found = true;
@@ -728,6 +747,11 @@ function extractSnapshotFromObject(source) {
     const value = coerceSnapshotValue(rawValue);
     if (canonical === "topic") {
       result.topic = value;
+      found = true;
+      return;
+    }
+    if (canonical === "archetype") {
+      result.archetype = value;
       found = true;
       return;
     }
@@ -2296,6 +2320,7 @@ function SnapshotPage({
 }) {
   /**
    * @typedef {Object} Snapshot
+   * @property {string} archetype
    * @property {string} problem
    * @property {string} model
    * @property {string} metaphor
@@ -2306,6 +2331,7 @@ function SnapshotPage({
    */
   const { toast, showToast } = useToast();
   const [snapshot, setSnapshot] = useState({
+    archetype: "",
     problem: "",
     model: "",
     metaphor: "",
@@ -2356,6 +2382,23 @@ function SnapshotPage({
           changed = true;
         }
       });
+      const hasFlatArchetype = Object.prototype.hasOwnProperty.call(
+        flatValues,
+        "archetype"
+      );
+      const archetypeValue = hasFlatArchetype
+        ? typeof flatValues.archetype === "string"
+          ? flatValues.archetype
+          : flatValues.archetype == null
+          ? ""
+          : String(flatValues.archetype)
+        : typeof snapshotProp?.archetype === "string"
+        ? snapshotProp.archetype
+        : "";
+      if (archetypeValue !== prev.archetype) {
+        next.archetype = archetypeValue;
+        changed = true;
+      }
       const hasFlatTopic = Object.prototype.hasOwnProperty.call(
         flatValues,
         "topic"
@@ -2687,10 +2730,39 @@ function SnapshotPage({
       try {
         const data = await postSnapshot(payload);
         setSnapshotWebhookResponse(data);
-        const ds = extractSnapshotPayload(data) || {};
+
+        const sources = [
+          data,
+          data?.deliverySnapshotUpdate,
+          data?.delivery_snapshot_update,
+          data?.deliverySnapshot,
+          data?.snapshot,
+        ].filter((source) => source && typeof source === "object");
+
+        const extracted = extractSnapshotPayload(data) || {};
+
         const normalized = {};
-        SNAPSHOT_FIELD_KEYS.forEach((key) => {
-          const rawValue = ds?.[key];
+        SNAPSHOT_FLAT_KEYS.forEach((key) => {
+          const variants = SNAPSHOT_FLAT_FIELD_VARIANTS[key] || [key];
+          let rawValue;
+          for (const source of sources) {
+            for (const variant of variants) {
+              if (!Object.prototype.hasOwnProperty.call(source, variant)) {
+                continue;
+              }
+              rawValue = source[variant];
+              break;
+            }
+            if (rawValue !== undefined) {
+              break;
+            }
+          }
+          if (
+            rawValue === undefined &&
+            Object.prototype.hasOwnProperty.call(extracted, key)
+          ) {
+            rawValue = extracted[key];
+          }
           normalized[key] =
             typeof rawValue === "string"
               ? rawValue
@@ -2698,25 +2770,17 @@ function SnapshotPage({
               ? ""
               : String(rawValue);
         });
-        const topicValue =
-          typeof ds?.topic === "string" && ds.topic.trim()
-            ? ds.topic
-            : undefined;
 
         setSnapshot((prev) => {
           let changed = false;
           const next = { ...prev };
-          SNAPSHOT_FIELD_KEYS.forEach((key) => {
+          SNAPSHOT_FLAT_KEYS.forEach((key) => {
             const value = normalized[key] ?? "";
             if (value !== prev[key]) {
               next[key] = value;
               changed = true;
             }
           });
-          if (topicValue && topicValue !== prev.topic) {
-            next.topic = topicValue;
-            changed = true;
-          }
           return changed ? next : prev;
         });
 
@@ -2731,20 +2795,18 @@ function SnapshotPage({
             const value = normalized[section.id] ?? "";
             return { ...section, content: value };
           });
-          const nextState = {
+          return {
             ...prev,
+            archetype: normalized.archetype ?? "",
+            topic: normalized.topic ?? "",
             sections: nextSections,
             text: snapshotSectionsToHtml(nextSections),
           };
-          if (topicValue) {
-            nextState.topic = topicValue;
-          }
-          return nextState;
         });
 
         showToast("Snapshot updated.", "success");
 
-        return ds;
+        return normalized;
       } catch (error) {
         console.error("Failed to generate snapshot", error);
         setSnapshotWebhookResponse(
@@ -2762,7 +2824,7 @@ function SnapshotPage({
         return null;
       }
     },
-    [setSnapshotProp, showToast]
+    [setSnapshot, setSnapshotProp, showToast]
   );
 
   const brandSummary = useMemo(() => {
@@ -5662,11 +5724,9 @@ function ContentOSApp() {
             >
               New
             </button>
-            {view !== "snapshot" && (
-              <span className="text-[11px] uppercase tracking-wide">
-                Ver {displayVersion}
-              </span>
-            )}
+            <span className="text-[11px] uppercase tracking-wide">
+              Ver {displayVersion}
+            </span>
           </div>
         </div>
 

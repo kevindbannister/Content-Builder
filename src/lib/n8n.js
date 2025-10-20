@@ -98,6 +98,8 @@ export async function postSnapshot(payload, options = {}) {
   }
 
   const data = await readJsonResponse(response);
-  if (!data) return mapSections({});
-  return mapSections(data);
+  if (!data || typeof data !== "object") {
+    return {};
+  }
+  return data;
 }
