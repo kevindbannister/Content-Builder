@@ -694,6 +694,23 @@ function canonicalSnapshotKey(key) {
   return SNAPSHOT_CANONICAL_KEY_LOOKUP[collapsed] || null;
 }
 
+function toSnakeCase(value) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .toLowerCase();
+}
+
+function getSnapshotFieldName(id) {
+  const snake = toSnakeCase(id);
+  return snake ? `ds_${snake}` : "";
+}
+
 function coerceSnapshotValue(value) {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -2654,12 +2671,126 @@ function SnapshotPage({
     if (!webhooks?.snapshotGenerate || generatingSnapshot) return;
     try {
       setGeneratingSnapshot(true);
+      const baseSections =
+        snapshotProp.sections && snapshotProp.sections.length
+          ? snapshotProp.sections
+          : createEmptySnapshotSections();
+
+      const rawSections = [];
+      const sectionDetails = [];
+      const dsFields = {};
+      const sectionContentById = {};
+
+      baseSections.forEach((section) => {
+        if (!section || typeof section !== "object") return;
+        const id =
+          typeof section.id === "string"
+            ? section.id
+            : typeof section.key === "string"
+            ? section.key
+            : null;
+        if (!id) return;
+        const definition = SNAPSHOT_SECTION_DEFINITIONS.find(
+          (def) => def.id === id
+        );
+        const content =
+          typeof section.content === "string"
+            ? section.content
+            : section.content == null
+            ? ""
+            : String(section.content);
+        const fieldName = getSnapshotFieldName(id);
+        if (fieldName) {
+          dsFields[fieldName] = content;
+        }
+        sectionContentById[id] = content;
+        rawSections.push({ id, content });
+        sectionDetails.push({
+          id,
+          key: id,
+          fieldName: fieldName || undefined,
+          title: definition?.title ?? id,
+          helper: definition?.helper ?? "",
+          placeholder: definition?.placeholder ?? "",
+          required: !!definition?.required,
+          maxWords:
+            typeof definition?.maxWords === "number"
+              ? definition.maxWords
+              : null,
+          content,
+        });
+      });
+
+      const resolvedTopic = (() => {
+        if (typeof snapshot.topic === "string" && snapshot.topic.trim()) {
+          return snapshot.topic;
+        }
+        if (typeof snapshotProp?.topic === "string" && snapshotProp.topic) {
+          return snapshotProp.topic;
+        }
+        return topics?.[0]?.name ?? "";
+      })();
+
+      const resolvedArchetype = (() => {
+        if (
+          typeof snapshot.archetype === "string" &&
+          snapshot.archetype.trim()
+        ) {
+          return snapshot.archetype;
+        }
+        if (
+          typeof snapshotProp?.archetype === "string" &&
+          snapshotProp.archetype
+        ) {
+          return snapshotProp.archetype;
+        }
+        return "";
+      })();
+
+      const snapshotValues = {
+        archetype: resolvedArchetype,
+        topic: resolvedTopic,
+      };
+
+      SNAPSHOT_FIELD_KEYS.forEach((key) => {
+        const value = sectionContentById[key] ?? snapshot[key] ?? snapshotProp?.[key];
+        snapshotValues[key] =
+          typeof value === "string" ? value : value == null ? "" : String(value);
+      });
+
+      Object.entries(snapshotValues).forEach(([key, value]) => {
+        const fieldName = getSnapshotFieldName(key);
+        if (fieldName) {
+          dsFields[fieldName] =
+            typeof value === "string" ? value : value == null ? "" : String(value);
+        }
+      });
+
+      const fields = {
+        ...snapshotValues,
+        ...dsFields,
+      };
+
+      const sessionId = ensureSessionId();
+
       const payload = {
         snapshotText: snapshotProp.text,
-        topic: topics[0] ?? null,
+        topic: resolvedTopic,
         topics,
         brand,
-        sessionId: ensureSessionId(),
+        sessionId,
+        sections: rawSections,
+        sectionDetails,
+        fields,
+        dsFields,
+        snapshotValues,
+        snapshot: {
+          ...snapshotValues,
+          sections: sectionDetails,
+          text: snapshotProp.text,
+          fields,
+          dsFields,
+        },
       };
       const res = await fetch(webhooks.snapshotGenerate, {
         method: "POST",
@@ -2718,11 +2849,12 @@ function SnapshotPage({
   }, [
     webhooks,
     generatingSnapshot,
-    snapshotProp.text,
+    snapshotProp,
     topics,
     brand,
     ensureSessionId,
     setSnapshotProp,
+    snapshot,
   ]);
 
   const handleGenerateSnapshot = useCallback(
@@ -3130,6 +3262,7 @@ function SnapshotPage({
                         </span>
                       </div>
                       <textarea
+                        name={getSnapshotFieldName(section.id) || undefined}
                         value={snapshot[section.id] ?? ""}
                         onChange={(event) =>
                           handleSectionChange(section.id, event.target.value)
