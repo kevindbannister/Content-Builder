@@ -680,10 +680,10 @@ function normalizeSnapshotResponse(raw) {
   };
 
   pushSource(payload);
+  pushSource(payload.snapshot);
+  pushSource(payload.deliverySnapshot);
   pushSource(payload.deliverySnapshotUpdate);
   pushSource(payload.delivery_snapshot_update);
-  pushSource(payload.deliverySnapshot);
-  pushSource(payload.snapshot);
 
   const extracted = extractSnapshotPayload(payload) || {};
 
