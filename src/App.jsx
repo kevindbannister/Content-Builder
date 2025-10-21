@@ -649,6 +649,99 @@ const SNAPSHOT_CANONICAL_KEY_LOOKUP = {
   topic: "topic",
 };
 
+const SNAPSHOT_RESPONSE_SECTION_WRAPPER = (sections) => ({
+  deliverySnapshotUpdate: { sections },
+});
+
+function coerceSnapshotResponse(raw) {
+  if (!raw || (typeof raw !== "object" && !Array.isArray(raw))) return null;
+  if (Array.isArray(raw)) {
+    return SNAPSHOT_RESPONSE_SECTION_WRAPPER(raw);
+  }
+  return raw;
+}
+
+function normalizeSnapshotResponse(raw) {
+  const payload = coerceSnapshotResponse(raw);
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const sources = [];
+  const pushSource = (value) => {
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      !sources.includes(value)
+    ) {
+      sources.push(value);
+    }
+  };
+
+  pushSource(payload);
+  pushSource(payload.deliverySnapshotUpdate);
+  pushSource(payload.delivery_snapshot_update);
+  pushSource(payload.deliverySnapshot);
+  pushSource(payload.snapshot);
+
+  const extracted = extractSnapshotPayload(payload) || {};
+
+  const normalized = {};
+  let found = false;
+
+  SNAPSHOT_FLAT_KEYS.forEach((key) => {
+    const variants = SNAPSHOT_FLAT_FIELD_VARIANTS[key] || [key];
+    let rawValue;
+
+    for (const source of sources) {
+      for (const variant of variants) {
+        if (!Object.prototype.hasOwnProperty.call(source, variant)) {
+          continue;
+        }
+        rawValue = source[variant];
+        break;
+      }
+      if (rawValue !== undefined) {
+        break;
+      }
+    }
+
+    if (
+      rawValue === undefined &&
+      Object.prototype.hasOwnProperty.call(extracted, key)
+    ) {
+      rawValue = extracted[key];
+    }
+
+    if (rawValue !== undefined) {
+      found = true;
+    }
+
+    normalized[key] =
+      typeof rawValue === "string"
+        ? rawValue
+        : rawValue == null
+        ? ""
+        : String(rawValue);
+  });
+
+  return found ? { normalized, sources, payload } : null;
+}
+
+function getMessageReplyContent(source) {
+  if (!source || typeof source !== "object") return "";
+  const message = source.messageReply || source.message_reply;
+  if (!message || typeof message !== "object") return "";
+  if (typeof message.text === "string" && message.text.trim()) {
+    return message.text.trim();
+  }
+  if (typeof message.html === "string" && message.html.trim()) {
+    return message.html.trim();
+  }
+  return "";
+}
+
 const createSnapshotWebhookExample = () => {
   const example = {
     deliverySnapshotUpdate: {
@@ -2497,6 +2590,186 @@ function SnapshotPage({
       });
   }, [snapshotProp.sections]);
 
+  const snapshotFieldPayload = useMemo(() => {
+    const baseSections =
+      snapshotProp.sections && snapshotProp.sections.length
+        ? snapshotProp.sections
+        : createEmptySnapshotSections();
+
+    const rawSections = [];
+    const sectionDetails = [];
+    const dsFields = {};
+    const sectionContentById = {};
+
+    baseSections.forEach((section) => {
+      if (!section || typeof section !== "object") return;
+      const id =
+        typeof section.id === "string"
+          ? section.id
+          : typeof section.key === "string"
+          ? section.key
+          : null;
+      if (!id) return;
+      const definition = SNAPSHOT_SECTION_DEFINITIONS.find(
+        (def) => def.id === id
+      );
+      const content =
+        typeof section.content === "string"
+          ? section.content
+          : section.content == null
+          ? ""
+          : String(section.content);
+      const fieldName = getSnapshotFieldName(id);
+      if (fieldName) {
+        dsFields[fieldName] = content;
+      }
+      sectionContentById[id] = content;
+      rawSections.push({ id, content });
+      sectionDetails.push({
+        id,
+        key: id,
+        fieldName: fieldName || undefined,
+        title: definition?.title ?? id,
+        helper: definition?.helper ?? "",
+        placeholder: definition?.placeholder ?? "",
+        required: !!definition?.required,
+        maxWords:
+          typeof definition?.maxWords === "number"
+            ? definition.maxWords
+            : null,
+        content,
+      });
+    });
+
+    const resolvedTopic = (() => {
+      if (typeof snapshot?.topic === "string" && snapshot.topic.trim()) {
+        return snapshot.topic;
+      }
+      if (typeof snapshotProp?.topic === "string" && snapshotProp.topic) {
+        return snapshotProp.topic;
+      }
+      return topics?.[0]?.name ?? "";
+    })();
+
+    const resolvedArchetype = (() => {
+      if (
+        typeof snapshot?.archetype === "string" &&
+        snapshot.archetype.trim()
+      ) {
+        return snapshot.archetype;
+      }
+      if (
+        typeof snapshotProp?.archetype === "string" &&
+        snapshotProp.archetype
+      ) {
+        return snapshotProp.archetype;
+      }
+      return "";
+    })();
+
+    const snapshotValues = {
+      archetype: resolvedArchetype,
+      topic: resolvedTopic,
+    };
+
+    SNAPSHOT_FIELD_KEYS.forEach((key) => {
+      const value =
+        sectionContentById[key] ??
+        (snapshot ? snapshot[key] : undefined) ??
+        (snapshotProp ? snapshotProp[key] : undefined);
+      snapshotValues[key] =
+        typeof value === "string" ? value : value == null ? "" : String(value);
+    });
+
+    Object.entries(snapshotValues).forEach(([key, value]) => {
+      const fieldName = getSnapshotFieldName(key);
+      if (fieldName) {
+        dsFields[fieldName] =
+          typeof value === "string" ? value : value == null ? "" : String(value);
+      }
+    });
+
+    const fields = {
+      ...snapshotValues,
+      ...dsFields,
+    };
+
+    return {
+      sections: rawSections,
+      sectionDetails,
+      dsFields,
+      fields,
+      snapshotValues,
+      resolvedTopic,
+      resolvedArchetype,
+    };
+  }, [snapshotProp, snapshot, topics]);
+
+  const applyNormalizedSnapshot = useCallback(
+    (normalized) => {
+      if (!normalized || typeof normalized !== "object") {
+        return false;
+      }
+
+      let changed = false;
+
+      setSnapshot((prev) => {
+        const next = { ...prev };
+        let hasChanges = false;
+        SNAPSHOT_FLAT_KEYS.forEach((key) => {
+          const value = normalized[key] ?? "";
+          if (value !== prev[key]) {
+            next[key] = value;
+            hasChanges = true;
+          }
+        });
+        if (!hasChanges) return prev;
+        changed = true;
+        return next;
+      });
+
+      setSnapshotProp((prev) => {
+        const baseSections =
+          prev.sections && prev.sections.length
+            ? prev.sections
+            : createEmptySnapshotSections();
+        let sectionsChanged = false;
+        const nextSections = baseSections.map((section) => {
+          if (!section || typeof section.id !== "string") return section;
+          if (!SNAPSHOT_FIELD_KEYS.includes(section.id)) return section;
+          const value = normalized[section.id] ?? "";
+          if (value === section.content) return section;
+          sectionsChanged = true;
+          return { ...section, content: value };
+        });
+
+        const archetype = normalized.archetype ?? "";
+        const topic = normalized.topic ?? "";
+        const nextText = snapshotSectionsToHtml(nextSections);
+
+        const archetypeChanged = archetype !== (prev.archetype ?? "");
+        const topicChanged = topic !== (prev.topic ?? "");
+        const textChanged = nextText !== (prev.text ?? "");
+
+        if (!sectionsChanged && !archetypeChanged && !topicChanged && !textChanged) {
+          return prev;
+        }
+
+        changed = true;
+        return {
+          ...prev,
+          archetype,
+          topic,
+          sections: nextSections,
+          text: nextText,
+        };
+      });
+
+      return changed;
+    },
+    [setSnapshot, setSnapshotProp]
+  );
+
   const allRequiredComplete = useMemo(
     () =>
       sectionsWithMeta.every(
@@ -2561,15 +2834,37 @@ function SnapshotPage({
           currentContent: section.content,
         };
 
+        const {
+          sections: snapshotSections,
+          sectionDetails,
+          fields,
+          dsFields,
+          snapshotValues,
+          resolvedTopic,
+        } = snapshotFieldPayload;
+
         const payload = isProblemSection
           ? basePayload
           : {
               ...basePayload,
               snapshotText: snapshotProp.text,
-              sections: snapshotProp.sections,
+              sections: snapshotSections,
+              sectionDetails,
               topics,
               brand,
               sessionId: ensureSessionId(),
+              topic: resolvedTopic,
+              archetype: snapshotValues.archetype ?? "",
+              fields,
+              dsFields,
+              snapshotValues,
+              snapshot: {
+                ...snapshotValues,
+                sections: sectionDetails,
+                text: snapshotProp.text,
+                fields,
+                dsFields,
+              },
             };
 
         const response = await fetch(targetWebhook, {
@@ -2580,16 +2875,55 @@ function SnapshotPage({
 
         if (!response.ok) throw new Error("HTTP error");
 
-        const replyText = (await response.text()).trim();
-        if (replyText) {
-          setSnapshot((prev) => ({ ...prev, [id]: replyText }));
+        const rawResponse = await response.text();
+        const replyText = rawResponse.trim();
+
+        let parsedReply = null;
+        if (replyText.startsWith("{") || replyText.startsWith("[")) {
+          try {
+            parsedReply = JSON.parse(replyText);
+          } catch {
+            parsedReply = null;
+          }
+        }
+
+        let normalizedResult = null;
+        if (parsedReply && typeof parsedReply === "object") {
+          normalizedResult = normalizeSnapshotResponse(parsedReply);
+          if (normalizedResult) {
+            applyNormalizedSnapshot(normalizedResult.normalized);
+          }
+        }
+
+        let nextContent = "";
+        const normalizedSectionValue =
+          normalizedResult?.normalized?.[id] ?? "";
+
+        if (normalizedSectionValue) {
+          nextContent = normalizedSectionValue;
+        } else if (parsedReply && typeof parsedReply === "object") {
+          const messageContent = getMessageReplyContent(parsedReply);
+          if (messageContent) {
+            nextContent = messageContent;
+          } else {
+            const extracted = extractSnapshotFromObject(parsedReply) || {};
+            if (typeof extracted[id] === "string" && extracted[id].trim()) {
+              nextContent = extracted[id];
+            }
+          }
+        } else {
+          nextContent = replyText;
+        }
+
+        if (nextContent) {
+          setSnapshot((prev) => ({ ...prev, [id]: nextContent }));
           setSnapshotProp((prev) => {
             const nextSections = (
               prev.sections && prev.sections.length
                 ? prev.sections
                 : createEmptySnapshotSections()
             ).map((item) =>
-              item.id === id ? { ...item, content: replyText } : item
+              item.id === id ? { ...item, content: nextContent } : item
             );
             return {
               ...prev,
@@ -2612,11 +2946,12 @@ function SnapshotPage({
       sectionPrompts,
       sectionRequesting,
       snapshotProp.text,
-      snapshotProp.sections,
+      snapshotFieldPayload,
       topics,
       brand,
       ensureSessionId,
       setSnapshotProp,
+      applyNormalizedSnapshot,
     ]
   );
 
@@ -2671,105 +3006,14 @@ function SnapshotPage({
     if (!webhooks?.snapshotGenerate || generatingSnapshot) return;
     try {
       setGeneratingSnapshot(true);
-      const baseSections =
-        snapshotProp.sections && snapshotProp.sections.length
-          ? snapshotProp.sections
-          : createEmptySnapshotSections();
-
-      const rawSections = [];
-      const sectionDetails = [];
-      const dsFields = {};
-      const sectionContentById = {};
-
-      baseSections.forEach((section) => {
-        if (!section || typeof section !== "object") return;
-        const id =
-          typeof section.id === "string"
-            ? section.id
-            : typeof section.key === "string"
-            ? section.key
-            : null;
-        if (!id) return;
-        const definition = SNAPSHOT_SECTION_DEFINITIONS.find(
-          (def) => def.id === id
-        );
-        const content =
-          typeof section.content === "string"
-            ? section.content
-            : section.content == null
-            ? ""
-            : String(section.content);
-        const fieldName = getSnapshotFieldName(id);
-        if (fieldName) {
-          dsFields[fieldName] = content;
-        }
-        sectionContentById[id] = content;
-        rawSections.push({ id, content });
-        sectionDetails.push({
-          id,
-          key: id,
-          fieldName: fieldName || undefined,
-          title: definition?.title ?? id,
-          helper: definition?.helper ?? "",
-          placeholder: definition?.placeholder ?? "",
-          required: !!definition?.required,
-          maxWords:
-            typeof definition?.maxWords === "number"
-              ? definition.maxWords
-              : null,
-          content,
-        });
-      });
-
-      const resolvedTopic = (() => {
-        if (typeof snapshot.topic === "string" && snapshot.topic.trim()) {
-          return snapshot.topic;
-        }
-        if (typeof snapshotProp?.topic === "string" && snapshotProp.topic) {
-          return snapshotProp.topic;
-        }
-        return topics?.[0]?.name ?? "";
-      })();
-
-      const resolvedArchetype = (() => {
-        if (
-          typeof snapshot.archetype === "string" &&
-          snapshot.archetype.trim()
-        ) {
-          return snapshot.archetype;
-        }
-        if (
-          typeof snapshotProp?.archetype === "string" &&
-          snapshotProp.archetype
-        ) {
-          return snapshotProp.archetype;
-        }
-        return "";
-      })();
-
-      const snapshotValues = {
-        archetype: resolvedArchetype,
-        topic: resolvedTopic,
-      };
-
-      SNAPSHOT_FIELD_KEYS.forEach((key) => {
-        const value = sectionContentById[key] ?? snapshot[key] ?? snapshotProp?.[key];
-        snapshotValues[key] =
-          typeof value === "string" ? value : value == null ? "" : String(value);
-      });
-
-      Object.entries(snapshotValues).forEach(([key, value]) => {
-        const fieldName = getSnapshotFieldName(key);
-        if (fieldName) {
-          dsFields[fieldName] =
-            typeof value === "string" ? value : value == null ? "" : String(value);
-        }
-      });
-
-      const fields = {
-        ...snapshotValues,
-        ...dsFields,
-      };
+      const {
+        sections: rawSections,
+        sectionDetails,
+        dsFields,
+        fields,
+        snapshotValues,
+        resolvedTopic,
+      } = snapshotFieldPayload;
 
       const sessionId = ensureSessionId();
 
@@ -2850,6 +3094,7 @@ function SnapshotPage({
     webhooks,
     generatingSnapshot,
     snapshotProp,
+    snapshotFieldPayload,
     topics,
     brand,
     ensureSessionId,
@@ -2863,82 +3108,17 @@ function SnapshotPage({
         const data = await postSnapshot(payload);
         setSnapshotWebhookResponse(data);
 
-        const sources = [
-          data,
-          data?.deliverySnapshotUpdate,
-          data?.delivery_snapshot_update,
-          data?.deliverySnapshot,
-          data?.snapshot,
-        ].filter((source) => source && typeof source === "object");
+        const normalizedResult = normalizeSnapshotResponse(data);
+        const normalized = normalizedResult?.normalized ?? null;
 
-        const extracted = extractSnapshotPayload(data) || {};
-
-        const normalized = {};
-        SNAPSHOT_FLAT_KEYS.forEach((key) => {
-          const variants = SNAPSHOT_FLAT_FIELD_VARIANTS[key] || [key];
-          let rawValue;
-          for (const source of sources) {
-            for (const variant of variants) {
-              if (!Object.prototype.hasOwnProperty.call(source, variant)) {
-                continue;
-              }
-              rawValue = source[variant];
-              break;
-            }
-            if (rawValue !== undefined) {
-              break;
-            }
-          }
-          if (
-            rawValue === undefined &&
-            Object.prototype.hasOwnProperty.call(extracted, key)
-          ) {
-            rawValue = extracted[key];
-          }
-          normalized[key] =
-            typeof rawValue === "string"
-              ? rawValue
-              : rawValue == null
-              ? ""
-              : String(rawValue);
-        });
-
-        setSnapshot((prev) => {
-          let changed = false;
-          const next = { ...prev };
-          SNAPSHOT_FLAT_KEYS.forEach((key) => {
-            const value = normalized[key] ?? "";
-            if (value !== prev[key]) {
-              next[key] = value;
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
-        });
-
-        setSnapshotProp((prev) => {
-          const nextSections = (
-            prev.sections && prev.sections.length
-              ? prev.sections
-              : createEmptySnapshotSections()
-          ).map((section) => {
-            if (!section || typeof section.id !== "string") return section;
-            if (!SNAPSHOT_FIELD_KEYS.includes(section.id)) return section;
-            const value = normalized[section.id] ?? "";
-            return { ...section, content: value };
-          });
-          return {
-            ...prev,
-            archetype: normalized.archetype ?? "",
-            topic: normalized.topic ?? "",
-            sections: nextSections,
-            text: snapshotSectionsToHtml(nextSections),
-          };
-        });
+        if (normalized) {
+          applyNormalizedSnapshot(normalized);
+          showToast("Snapshot updated.", "success");
+          return normalized;
+        }
 
         showToast("Snapshot updated.", "success");
-
-        return normalized;
+        return null;
       } catch (error) {
         console.error("Failed to generate snapshot", error);
         setSnapshotWebhookResponse(
@@ -2956,7 +3136,7 @@ function SnapshotPage({
         return null;
       }
     },
-    [setSnapshot, setSnapshotProp, showToast]
+    [applyNormalizedSnapshot, showToast]
   );
 
   const brandSummary = useMemo(() => {
@@ -5622,6 +5802,15 @@ function ContentOSApp() {
     setSnapshotChatSending(true);
 
     try {
+      const {
+        sections: rawSections,
+        sectionDetails,
+        fields,
+        dsFields,
+        snapshotValues,
+        resolvedTopic,
+      } = snapshotFieldPayload;
+
       const response = await fetch(WEBHOOKS.snapshotChange, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -5635,9 +5824,23 @@ function ContentOSApp() {
             timestamp,
           })),
           snapshotText: snapshot.text,
+          sections: rawSections,
+          sectionDetails,
           topics,
           brand,
           sessionId: ensureSessionId(),
+          topic: resolvedTopic,
+          archetype: snapshotValues.archetype ?? "",
+          fields,
+          dsFields,
+          snapshotValues,
+          snapshot: {
+            ...snapshotValues,
+            sections: sectionDetails,
+            text: snapshot.text,
+            fields,
+            dsFields,
+          },
         }),
       });
 
